@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/garyburd/go-websocket/websocket"
 	"html/template"
 	"log"
@@ -31,11 +32,12 @@ var game = &Game{
 
 // Creates and setups the the network event listers for html
 // and websocket interfaces
-func (g *Game) InitConnections(addr, root string) {
-	http.HandleFunc(root, serveHome)
-	http.HandleFunc(root+"/ws", serveWsConn)
+func (g *Game) InitConnections() {
+	http.HandleFunc(*rootURLPath, serveHome)
+	http.HandleFunc(*rootURLPath+"/ws", serveWsConn)
 
-	err := http.ListenAndServe(addr, nil)
+	address := fmt.Sprintf("%s:%d", *addr, *port)
+	err := http.ListenAndServe(address, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
@@ -105,6 +107,7 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 
 	tmpData := map[string]interface{}{
 		"Host": r.Host,
+		"Port": *port,
 		"Path": *rootURLPath,
 	}
 	homeTempl.Execute(w, tmpData)

@@ -1,5 +1,3 @@
-
-
 $(document).ready(function() {
     var conn = null;
     var ctx = null;
@@ -12,7 +10,12 @@ $(document).ready(function() {
     }
 
     if (window["WebSocket"]) {
-        conn = new WebSocket("ws://" + _apollo.host + _apollo.path + "/ws");
+    	var wsURL = "ws://" + _apollo.host;
+    	if (_apollo.wsPort) {
+    		wsURL += ":" + _apollo.wsPort;
+    	}
+    	wsURL += _apollo.path + "/ws";
+        conn = new WebSocket(wsURL);
         conn.onclose = function(evt) {
             console.log('Connection Closed');
         }
