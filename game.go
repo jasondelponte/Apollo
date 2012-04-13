@@ -31,9 +31,9 @@ var game = &Game{
 
 // Creates and setups the the network event listers for html
 // and websocket interfaces
-func (g *Game) InitConnections(addr string) {
-	http.HandleFunc("/", serveHome)
-	http.HandleFunc("/ws", serveWsConn)
+func (g *Game) InitConnections(addr, root string) {
+	http.HandleFunc(root, serveHome)
+	http.HandleFunc(root+"/ws", serveWsConn)
 
 	err := http.ListenAndServe(addr, nil)
 	if err != nil {
@@ -93,7 +93,7 @@ func (g *Game) stopSim() {
 // Network event handler for HTTP trafic. Serves up the 
 // home.html file which will allow connection to the websocket
 func serveHome(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
+	if r.URL.Path != *rootURLPath {
 		http.Error(w, "Not found", 404)
 		return
 	}
@@ -102,7 +102,12 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	homeTempl.Execute(w, r.Host)
+
+	tmpData := map[string]interface{}{
+		"Host": r.Host,
+		"Path": *rootURLPath,
+	}
+	homeTempl.Execute(w, tmpData)
 }
 
 // handles webocket requests from the client.

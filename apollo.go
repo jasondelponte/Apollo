@@ -5,7 +5,8 @@ import (
 	"log"
 )
 
-var addr = flag.String("addr", ":8080", "Address and Port server is to run on")
+var addr = flag.String("a", ":8080", "Address and Port server is to run on")
+var rootURLPath = flag.String("r", "/", "URL Path root of the webapp")
 
 func main() {
 	flag.Parse()
@@ -13,5 +14,5 @@ func main() {
 	defer func() { log.Println("Existing apollo") }()
 	go game.Run()
 
-	game.InitConnections(*addr)
+	game.InitConnections(*addr, *rootURLPath)
 }

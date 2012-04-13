@@ -1,38 +1,13 @@
 <html>
 <head>
-<title>Go Websocket Example</title>
+<title>Apollo</title>
 <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js"></script>
+<script type="text/javascript" src="http://{{.Host}}{{.Path}}js/apollo.js"></script>
 <script type="text/javascript">
-    $(document).ready(function() {
-        var conn = null;
-        var ctx = null;
-
-        function drawBlock(block) {
-            ctx.fillStyle = "rgba("+block.R+","+block.G+","+block.B+", 0."+block.A+")";
-            ctx.fillRect (block.X, block.Y, block.W, block.H);
-        }
-
-        if (window["WebSocket"]) {
-            conn = new WebSocket("ws://{{$}}/ws");
-            conn.onclose = function(evt) {
-                console.log('Connection Closed');
-            }
-            conn.onmessage = function(evt) {
-                var block = JSON.parse(evt.data).Block;
-                drawBlock(block);
-            }
-        } else {
-            $('.no-websockets').removeClass('hidden');
-        }
-
-        var canvas = $('#game-board')[0];
-        if (canvas.getContext){
-            ctx = canvas.getContext('2d');
-
-        } else {
-            $('.no-canvas').removeClass('hidden');
-        }
-    });
+    window.apolloApp = {
+        host: {{.Host}},
+        path: {{.Path}}
+    }
 </script>
 
 <style type="text/css">
