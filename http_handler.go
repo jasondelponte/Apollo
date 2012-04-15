@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -61,7 +62,7 @@ func (h *HttpHandler) HandleHttpConnection(world *World) {
 
 	// Build the address with port if it's provided
 	address := h.Addr
-	if h.Port != 80 {
+	if h.Port != 0 {
 		address = fmt.Sprintf("%s:%d", h.Addr, h.Port)
 	}
 
@@ -79,10 +80,13 @@ func (h *HttpHandler) loadTemplates() {
 // Network event handler for HTTP trafic. Serves up the 
 // home.html file which will allow connection to the websocket
 func (h *HttpHandler) initServeHomeHndlr(path string, world *World) {
-	tmplData := map[string]interface{}{
+	tmplData := map[string]string{
 		"Host":     "",
+		"WsHost":   "",
 		"RootPath": h.RootURLPath,
 	}
+
+	hostPortRep := regexp.MustCompile(":\\d+$")
 
 	http.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != h.RootURLPath+"/" {
@@ -95,10 +99,29 @@ func (h *HttpHandler) initServeHomeHndlr(path string, world *World) {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-		tmplData["Host"] = r.Host
-		if !strings.Contains(r.Host, ":") && h.Port != 80 {
-			tmplData["Host"] = fmt.Sprintf("%s:%d", r.Host, h.Port)
+		// Normal http host
+		if len(tmplData["Host"]) == 0 {
+			tmplData["Host"] = r.Host
+			if h.ServeStatic && h.Port != 0 {
+				if strings.Contains(r.Host, ":") {
+					tmplData["Host"] = hostPortRep.ReplaceAllString(r.Host, fmt.Sprintf(":%d", h.Port))
+				} else {
+					tmplData["Host"] = fmt.Sprintf("%s:%d", r.Host, h.Port)
+				}
+			}
 		}
+		// Host for websockets
+		if len(tmplData["WsHost"]) == 0 {
+			tmplData["WsHost"] = r.Host
+			if h.Port != 0 {
+				if strings.Contains(r.Host, ":") {
+					tmplData["WsHost"] = hostPortRep.ReplaceAllString(r.Host, fmt.Sprintf(":%d", h.Port))
+				} else {
+					tmplData["WsHost"] = fmt.Sprintf("%s:%d", r.Host, h.Port)
+				}
+			}
+		}
+
 		h.templates.Execute(w, tmplData)
 	})
 }

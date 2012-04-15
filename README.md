@@ -1,8 +1,9 @@
 ## Installing it
 
-To install the package follow the normal go package installtion of
+To install the package follow the normal go package installtion.  The go.net websocket package may need to be installed manually, and mercurial is require to pull from that repo.
 
 ```bash
+go get code.google.com/p/go.net/websocket
 go get github.com/jasondelponte/Apollo
 ```
 

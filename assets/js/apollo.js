@@ -10,7 +10,7 @@ $(document).ready(function() {
     }
 
     if (window["WebSocket"]) {
-    	var wsURL = "ws://" + _apollo.host + _apollo.path + "/ws";
+    	var wsURL = "ws://" + _apollo.wsHost + _apollo.path + "/ws";
 
         conn = new WebSocket(wsURL);
         conn.onclose = function(evt) {
