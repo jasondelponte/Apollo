@@ -17,8 +17,9 @@ type HttpError struct {
 	CodeNum     int
 }
 
-func (h *HttpError) Error() string { return h.ErrorString }
-func (h *HttpError) Code() int     { return h.CodeNum }
+func (h HttpError) Error() string                { return h.ErrorString }
+func (h HttpError) Code() int                    { return h.CodeNum }
+func (h HttpError) Report(w http.ResponseWriter) { http.Error(w, h.ErrorString, h.CodeNum) }
 
 var (
 	ErrHttpResourceNotFound = &HttpError{ErrorString: "Not found", CodeNum: 404}
@@ -85,11 +86,11 @@ func (h *HttpHandler) initServeHomeHndlr(path string, world *World) {
 
 	http.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != h.RootURLPath+"/" {
-			http.Error(w, ErrHttpResourceNotFound.Error(), ErrHttpResourceNotFound.Code())
+			ErrHttpResourceNotFound.Report(w)
 			return
 		}
 		if r.Method != "GET" {
-			http.Error(w, ErrHttpMethodNotAllowed.Error(), ErrHttpMethodNotAllowed.Code())
+			ErrHttpMethodNotAllowed.Report(w)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -105,16 +106,15 @@ func (h *HttpHandler) initServeHomeHndlr(path string, world *World) {
 // Simple handler for serving static files
 func (h *HttpHandler) initServeStaticHndlr(path string) {
 	http.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
-
 		asset := r.URL.Path[h.rootURLPathLen:]
 		file, err := os.Open(asset)
 		if err != nil {
-			http.Error(w, ErrHttpResourceNotFound.Error(), ErrHttpResourceNotFound.Code())
+			ErrHttpResourceNotFound.Report(w)
 			return
 		}
 		stat, err := file.Stat()
 		if err != nil {
-			http.Error(w, ErrHttpInternalError.Error(), ErrHttpInternalError.Code())
+			ErrHttpInternalError.Report(w)
 			return
 		}
 		http.ServeContent(w, r, asset, stat.ModTime(), file)
@@ -125,13 +125,13 @@ func (h *HttpHandler) initServeStaticHndlr(path string) {
 func (h *HttpHandler) initServeGbWsHndlr(path string, world *World) {
 	http.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
-			http.Error(w, ErrHttpMethodNotAllowed.Error(), ErrHttpMethodNotAllowed.Code())
+			ErrHttpMethodNotAllowed.Report(w)
 			return
 		}
 		ws, err := gbws.Upgrade(w, r.Header, "", 1024, 1024)
 		if err != nil {
-			log.Println(err)
-			http.Error(w, ErrHttpBadRequeset.Error(), ErrHttpBadRequeset.Code())
+			log.Println("Unable to upgrade connection,", err)
+			ErrHttpBadRequeset.Report(w)
 			return
 		}
 
