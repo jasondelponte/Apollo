@@ -12,9 +12,7 @@ go get github.com/jasondelponte/Apollo
 * -a Address - The IP address the app will listen on, default is blank, which whould mean "localhost"
 * -r RootURLPath - The root URL path that you'll use to access the app at. eg. "jasondelponte.com/goapps/apollo/" would be "-r /goapps/apollo".  Blank is the default which translates into "/"
 * -s true|false - Sets if the webapp should serve up the resources in the "assets" directory its self. Default is false, and expects some other service to serve the files in the assets directory.
-* -w gb|gn - Sets which websocket library to use. 
-** gb - go.net/websocket which supports version 13 and 8
-** gb - gauryburd/go-websocket which supports version 13
+* -w gb|gn - Sets which websocket library to use. **gb** (go.net/websocket) which supports version 13 and 8. **gb** (gauryburd/go-websocket) which supports version 13
 
 ## Why?
 I'm very interested in Go Lang and decided to try building simple applications with it.  This app exercises some go's paralle event driven capabilities. While at the same time I'm playing around with the json encode/deocder, and websockets.
