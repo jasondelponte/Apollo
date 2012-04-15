@@ -1,8 +1,9 @@
 package main
 
 import (
+	gnws "code.google.com/p/go.net/websocket"
 	"encoding/json"
-	"github.com/garyburd/go-websocket/websocket"
+	gbws "github.com/garyburd/go-websocket/websocket"
 	"io"
 	"io/ioutil"
 	"log"
@@ -10,6 +11,7 @@ import (
 )
 
 type Connection interface {
+	GetId() uint64
 	AttachReader(reader chan MessageIn)
 	Send(msg interface{}) error
 	ReadPump()
@@ -49,15 +51,19 @@ const (
 )
 
 // Creates a new instance of the ws
-func NewWsConn() *WsConn {
-	return &WsConn{}
+func NewGbWsConn(id uint64, ws *gbws.Conn) *GbWsConn {
+	return &GbWsConn{
+		id:   id,
+		send: make(chan []byte, 256),
+		ws:   ws,
+	}
 }
 
-type WsConn struct {
+type GbWsConn struct {
 	id uint64
 
 	// The websocket connection.
-	ws *websocket.Conn
+	ws *gbws.Conn
 
 	// Buffered channel of outbound messages.
 	send chan []byte
@@ -66,13 +72,18 @@ type WsConn struct {
 	reader chan MessageIn
 }
 
+// Returns the connection's id
+func (c GbWsConn) GetId() uint64 {
+	return c.id
+}
+
 // Sets the channel the connection should forward incomming messages to
-func (c *WsConn) AttachReader(reader chan MessageIn) {
+func (c *GbWsConn) AttachReader(reader chan MessageIn) {
 	c.reader = reader
 }
 
 // Serializes an object and sends it across the the wire
-func (c *WsConn) Send(msg interface{}) error {
+func (c *GbWsConn) Send(msg interface{}) error {
 	marshaled, err := json.Marshal(msg)
 	if err != nil {
 		log.Println("ERROR", "Connection", c.id, "Failed to marshal data to send to client")
@@ -83,14 +94,14 @@ func (c *WsConn) Send(msg interface{}) error {
 }
 
 // Closes the send and attached reader channels
-func (c *WsConn) Close() {
+func (c *GbWsConn) Close() {
 	close(c.send)
 	close(c.reader)
 }
 
 // Handler furnction for periodic reading from the input socks.
 // Handles closing of the socket, of the connection drops
-func (c *WsConn) ReadPump() {
+func (c *GbWsConn) ReadPump() {
 	defer c.ws.Close()
 	for {
 		c.ws.SetReadDeadline(time.Now().Add(readWait))
@@ -99,7 +110,7 @@ func (c *WsConn) ReadPump() {
 			log.Println("Error getting next reader", err)
 			return
 		}
-		if op != websocket.OpText {
+		if op != gbws.OpText {
 			continue
 		}
 		lr := io.LimitedReader{R: r, N: maxMessageSize + 1}
@@ -110,8 +121,8 @@ func (c *WsConn) ReadPump() {
 		}
 		if lr.N <= 0 {
 			log.Println("No data received from message, closing")
-			c.ws.WriteControl(websocket.OpClose,
-				websocket.FormatCloseMessage(websocket.CloseMessageTooBig, ""),
+			c.ws.WriteControl(gbws.OpClose,
+				gbws.FormatCloseMessage(gbws.CloseMessageTooBig, ""),
 				time.Now().Add(time.Second))
 			return
 		}
@@ -124,7 +135,7 @@ func (c *WsConn) ReadPump() {
 }
 
 // write writes a message with the given opCode and payload.
-func (c *WsConn) write(opCode int, payload []byte) error {
+func (c *GbWsConn) write(opCode int, payload []byte) error {
 	c.ws.SetWriteDeadline(time.Now().Add(writeWait))
 	w, err := c.ws.NextWriter(opCode)
 	if err != nil {
@@ -140,7 +151,7 @@ func (c *WsConn) write(opCode int, payload []byte) error {
 }
 
 // writePump pumps messages from the hub to the websocket connection.
-func (c *WsConn) WritePump() {
+func (c *GbWsConn) WritePump() {
 	defer c.ws.Close()
 	ticker := time.NewTicker(pingPeriod)
 	defer ticker.Stop()
@@ -148,16 +159,84 @@ func (c *WsConn) WritePump() {
 		select {
 		case message, ok := <-c.send:
 			if !ok {
-				c.write(websocket.OpClose, []byte{})
+				c.write(gbws.OpClose, []byte{})
 				return
 			}
-			if err := c.write(websocket.OpText, message); err != nil {
+			if err := c.write(gbws.OpText, message); err != nil {
 				return
 			}
 		case <-ticker.C:
-			if err := c.write(websocket.OpPing, []byte{}); err != nil {
+			if err := c.write(gbws.OpPing, []byte{}); err != nil {
 				return
 			}
 		}
+	}
+}
+
+func NewGnWsConn(id uint64, ws *gnws.Conn) *GnWsConn {
+	return &GnWsConn{
+		id:    id,
+		send:  make(chan interface{}, 256),
+		ws:    ws,
+		alive: true,
+	}
+}
+
+type GnWsConn struct {
+	id     uint64
+	reader chan MessageIn
+	send   chan interface{}
+	ws     *gnws.Conn
+	alive  bool
+}
+
+// Returns the connection's id
+func (c GnWsConn) GetId() uint64 {
+	return c.id
+}
+
+func (c *GnWsConn) AttachReader(reader chan MessageIn) {
+	c.reader = reader
+}
+func (c *GnWsConn) Send(msg interface{}) error {
+	c.send <- msg
+	return nil
+}
+func (c *GnWsConn) ReadPump() {
+	for {
+		var msg MessageIn
+		err := gnws.JSON.Receive(c.ws, &msg)
+		if err != nil {
+			log.Println("Failed to read from ws, ", err, "id", c.id)
+			return
+		}
+
+		c.reader <- msg
+	}
+}
+func (c *GnWsConn) WritePump() {
+	for {
+		select {
+		case msg, ok := <-c.send:
+			if !ok {
+				log.Println("WS send chan closed id", c.id)
+				return
+			}
+
+			err := gnws.JSON.Send(c.ws, msg)
+			if err != nil {
+				log.Println("Failed to write to ws, ", err, "id", c.id)
+				return
+			}
+		}
+	}
+}
+func (c *GnWsConn) Close() {
+	if c.alive {
+		close(c.send)
+		close(c.reader)
+		c.alive = false
+	} else {
+		log.Println("trying to close already closed connection")
 	}
 }

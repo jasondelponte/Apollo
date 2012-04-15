@@ -1,46 +1,50 @@
 package main
 
 import (
-	"fmt"
-	"github.com/garyburd/go-websocket/websocket"
-	"html/template"
 	"log"
-	"net/http"
 )
 
-type Game struct {
-	sim        *Simulation
-	players    map[*Player]bool
-	register   chan *Player
-	unregister chan *Player
-	playerCtrl chan interface{}
-	simUpdate  chan interface{}
+type GameState struct {
+	sigle byte
 }
 
-var homeTempl = template.Must(template.ParseFiles("templates/home.html"))
+func (s *GameState) State() byte { return s.sigle }
+
+var (
+	GameStateRunning = &GameState{sigle: 0}
+	GameStatePaused  = &GameState{sigle: 1}
+	GameStateStopped = &GameState{sigle: 2}
+)
+
+// Definition of the game object
+type Game struct {
+	id           uint64
+	sim          *Simulation
+	board        *Board
+	state        *GameState
+	players      map[*Player]bool
+	addPlayer    chan *Player
+	removePlayer chan *Player
+	playerCtrl   chan interface{}
+}
 
 // Initalization of the game object.game  It s being done in the package's
 // global scope so the network event handler will have access to it when
-// receiving new player connections. TODO figure out how to remove it from global
-var game = &Game{
-	players:    make(map[*Player]bool),
-	register:   make(chan *Player),
-	unregister: make(chan *Player),
-	playerCtrl: make(chan interface{}),
-	simUpdate:  make(chan interface{}),
+// receiving new player connections.
+func NewGame(id uint64) *Game {
+	g := &Game{
+		id:           id,
+		state:        GameStateStopped,
+		players:      make(map[*Player]bool),
+		addPlayer:    make(chan *Player),
+		removePlayer: make(chan *Player),
+		playerCtrl:   make(chan interface{}),
+	}
+	return g
 }
 
-// Creates and setups the the network event listers for html
-// and websocket interfaces
-func (g *Game) InitConnections() {
-	http.HandleFunc(*rootURLPath, serveHome)
-	http.HandleFunc(*rootURLPath+"/ws", serveWsConn)
-
-	address := fmt.Sprintf("%s:%d", *addr, *port)
-	err := http.ListenAndServe(address, nil)
-	if err != nil {
-		log.Fatal("ListenAndServe: ", err)
-	}
+func (g Game) GetId() uint64 {
+	return g.id
 }
 
 // Event receiver to processing messages between the simulation and
@@ -48,91 +52,43 @@ func (g *Game) InitConnections() {
 // will be started, but as soon as the last player drops out the
 // simulation will be terminated.
 func (g *Game) Run() {
+	log.Println("Game", g.id, "started")
 	for {
 		select {
-		case p := <-g.register:
-			log.Println("New Player registered")
-			g.players[p] = true
-
-			// Create the sim if this is the first user connected
-			if g.sim == nil {
-				g.startSim()
-			}
-
-		case p := <-g.unregister:
-			log.Println("Player unregistered")
-			delete(g.players, p)
-			p.Disconnect()
-
-			// Disable the sim if there are no more players
-			if len(g.players) == 0 {
-				g.stopSim()
-			}
+		case <-g.addPlayer:
+		case <-g.removePlayer:
 		case <-g.playerCtrl:
 			// TODO do soemthing with the incomming player control object
-
-		case update := <-g.simUpdate:
-			for p, _ := range g.players {
-				p.UpdateBoard(update)
-			}
 		}
-
 	}
 }
 
 // Create the simulator, and start it running
-func (g *Game) startSim() {
-	g.sim = NewSimulation(g.simUpdate)
+func (g *Game) startGame() {
+	// g.sim = NewSimulation()
+	g.board = NewBoard()
+	g.state = GameStateRunning
 	go g.sim.Run()
 }
 
 // Terminate the simulator, and remove its instance
-func (g *Game) stopSim() {
+func (g *Game) stopGame() {
 	close(g.sim.halt)
 	g.sim = nil
+	g.board = nil
 }
 
-// Network event handler for HTTP trafic. Serves up the 
-// home.html file which will allow connection to the websocket
-func serveHome(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != *rootURLPath {
-		http.Error(w, "Not found", 404)
-		return
-	}
-	if r.Method != "GET" {
-		http.Error(w, "Method nod allowed", 405)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-
-	tmpData := map[string]interface{}{
-		"Host": r.Host,
-		"Port": *port,
-		"Path": *rootURLPath,
-	}
-	homeTempl.Execute(w, tmpData)
+// Returns the current state of the game
+func (g Game) getState() *GameState {
+	return g.state
 }
 
-// handles webocket requests from the client.
-func serveWsConn(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		http.Error(w, "Method not allowed", 405)
-		return
-	}
-	ws, err := websocket.Upgrade(w, r.Header, "", 1024, 1024)
-	if err != nil {
-		log.Println(err)
-		http.Error(w, "Bad request", 400)
-		return
-	}
+// Returns if the game has reached its limit of players
+func (g *Game) IsFull() bool {
+	return false
+}
 
-	conn := &WsConn{send: make(chan []byte, 256), ws: ws}
-	player := NewPlayer(conn)
-
-	defer func() { game.unregister <- player }()
-	go conn.WritePump()
-	go player.Run(game)
-
-	// Read pump will hold the connection open until we are finished with it.
-	conn.ReadPump()
+// Adds a new player to the game.
+func (g *Game) AddPlayer(p *Player) {
+	log.Printf("Adding player %d to game %d", p.GetId(), g.id)
 }

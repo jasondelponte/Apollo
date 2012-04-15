@@ -2,18 +2,18 @@ package main
 
 import (
 	"flag"
-	"log"
 )
 
-var addr = flag.String("a", "", "Address server is to run on")
+var addr = flag.String("a", "", "IP address the server is to run on")
 var port = flag.Uint("p", 8080, "Port address to run the server on")
-var rootURLPath = flag.String("r", "/", "URL Path root of the webapp")
+var rootURLPath = flag.String("r", "", "URL Path root of the webapp")
+var servceStatic = flag.Bool("s", false, "Set if apollo should service up static content")
 
 func main() {
 	flag.Parse()
 
-	defer func() { log.Println("Existing apollo") }()
-	go game.Run()
+	httpHndlr := &HttpHandler{Addr: *addr, Port: *port, RootURLPath: *rootURLPath, ServeStatic: *servceStatic}
+	world := NewWorld(httpHndlr)
 
-	game.InitConnections()
+	world.Run()
 }
