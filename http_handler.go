@@ -5,9 +5,9 @@ import (
 	"fmt"
 	gbws "github.com/garyburd/go-websocket/websocket"
 	"html/template"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -24,6 +24,7 @@ var (
 	ErrHttpResourceNotFound = &HttpError{ErrorString: "Not found", CodeNum: 404}
 	ErrHttpMethodNotAllowed = &HttpError{ErrorString: "Method not allowed", CodeNum: 405}
 	ErrHttpBadRequeset      = &HttpError{ErrorString: "Bad request", CodeNum: 400}
+	ErrHttpInternalError    = &HttpError{ErrorString: "Internal failure", CodeNum: 500}
 )
 
 type HttpHandler struct {
@@ -34,6 +35,7 @@ type HttpHandler struct {
 	templates      *template.Template
 	nextWsConnId   uint64
 	rootURLPathLen int
+	WsConnType     string
 }
 
 // Configures the http connection and starts the listender
@@ -43,11 +45,18 @@ func (h *HttpHandler) HandleHttpConnection(world *World) {
 	h.loadTemplates()
 
 	h.initServeHomeHndlr(h.RootURLPath+"/", world)
-	h.initServeStaticHndlr(h.RootURLPath + "/assets/")
-	// if h.ServeStatic {
-	// }
-	h.initServeGbWsHndlr(h.RootURLPath+"/ws-gb", world)
-	h.initServeGnWsHndlr(h.RootURLPath+"/ws-gn", world)
+
+	// If the goapp is serving the static files
+	if h.ServeStatic {
+		h.initServeStaticHndlr(h.RootURLPath + "/assets/")
+	}
+
+	// Switch between the different go websocket libraries
+	if h.WsConnType == "gb" {
+		h.initServeGbWsHndlr(h.RootURLPath+"/ws", world)
+	} else {
+		h.initServeGnWsHndlr(h.RootURLPath+"/ws", world)
+	}
 
 	// Build the address with port if it's provided
 	address := h.Addr
@@ -96,13 +105,19 @@ func (h *HttpHandler) initServeHomeHndlr(path string, world *World) {
 // Simple handler for serving static files
 func (h *HttpHandler) initServeStaticHndlr(path string) {
 	http.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+
 		asset := r.URL.Path[h.rootURLPathLen:]
-		body, err := ioutil.ReadFile(asset)
+		file, err := os.Open(asset)
 		if err != nil {
 			http.Error(w, ErrHttpResourceNotFound.Error(), ErrHttpResourceNotFound.Code())
 			return
 		}
-		w.Write(body)
+		stat, err := file.Stat()
+		if err != nil {
+			http.Error(w, ErrHttpInternalError.Error(), ErrHttpInternalError.Code())
+			return
+		}
+		http.ServeContent(w, r, asset, stat.ModTime(), file)
 	})
 }
 

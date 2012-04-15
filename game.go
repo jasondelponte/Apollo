@@ -2,18 +2,19 @@ package main
 
 import (
 	"log"
+	"time"
 )
 
 type GameState struct {
-	sigle byte
+	s byte
 }
 
-func (s *GameState) State() byte { return s.sigle }
+func (s *GameState) State() byte { return s.s }
 
 var (
-	GameStateRunning = &GameState{sigle: 0}
-	GameStatePaused  = &GameState{sigle: 1}
-	GameStateStopped = &GameState{sigle: 2}
+	GameStateRunning = &GameState{s: 0}
+	GameStatePaused  = &GameState{s: 1}
+	GameStateStopped = &GameState{s: 2}
 )
 
 // Definition of the game object
@@ -27,6 +28,10 @@ type Game struct {
 	removePlayer chan *Player
 	playerCtrl   chan interface{}
 }
+
+const (
+	delayBetweenSimStep = (500 * time.Millisecond)
+)
 
 // Initalization of the game object.game  It s being done in the package's
 // global scope so the network event handler will have access to it when
@@ -52,28 +57,53 @@ func (g Game) GetId() uint64 {
 // will be started, but as soon as the last player drops out the
 // simulation will be terminated.
 func (g *Game) Run() {
-	log.Println("Game", g.id, "started")
+	defer func() { log.Println("Game ", g.id, " event loop terminating") }()
 	for {
 		select {
-		case <-g.addPlayer:
-		case <-g.removePlayer:
+		case <-time.After(delayBetweenSimStep):
+			update := g.sim.Step()
+			if update != nil {
+				g.broadcastUpdate(update)
+			}
+
+		case p := <-g.addPlayer:
+			log.Printf("Adding player %d to game %d", p.GetId(), g.id)
+			g.players[p] = true
+			if len(g.players) == 1 {
+				g.startGame()
+			}
+
+		case p := <-g.removePlayer:
+			log.Printf("Removing player %d from game %d", p.GetId(), g.id)
+			if g.players[p] {
+				delete(g.players, p)
+			}
+			if len(g.players) == 0 {
+				g.stopGame()
+			}
+
 		case <-g.playerCtrl:
 			// TODO do soemthing with the incomming player control object
 		}
 	}
 }
 
+// Sends out an update to all players
+func (g *Game) broadcastUpdate(update interface{}) {
+	for p, _ := range g.players {
+		p.SendToPlayer(update)
+	}
+}
+
 // Create the simulator, and start it running
 func (g *Game) startGame() {
-	// g.sim = NewSimulation()
 	g.board = NewBoard()
+	g.sim = NewSimulation(g.board)
 	g.state = GameStateRunning
-	go g.sim.Run()
 }
 
 // Terminate the simulator, and remove its instance
 func (g *Game) stopGame() {
-	close(g.sim.halt)
 	g.sim = nil
 	g.board = nil
 }
@@ -88,7 +118,12 @@ func (g *Game) IsFull() bool {
 	return false
 }
 
-// Adds a new player to the game.
+// Signals the game to add a new player to the game
 func (g *Game) AddPlayer(p *Player) {
-	log.Printf("Adding player %d to game %d", p.GetId(), g.id)
+	g.addPlayer <- p
+}
+
+// Signals the game to remove a player from the game
+func (g *Game) RemovePlayer(p *Player) {
+	g.removePlayer <- p
 }

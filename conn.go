@@ -10,6 +10,17 @@ import (
 	"time"
 )
 
+type ConnError struct {
+	ConnErrorString string
+}
+
+func (c *ConnError) Error() string { return c.ConnErrorString }
+
+var (
+	ConnErrorSendClosed = &ConnError{"Connection's send chan already closed"}
+	ConnErrorReadClosed = &ConnError{"Connection's reader chan already closed"}
+)
+
 type Connection interface {
 	GetId() uint64
 	AttachReader(reader chan MessageIn)
@@ -17,30 +28,6 @@ type Connection interface {
 	ReadPump()
 	WritePump()
 	Close()
-}
-
-type MessageIn struct {
-	ReqId string
-	Cmd   *MsgPartCommand
-}
-
-type MsgPartCommand struct {
-	OpCode string
-}
-
-type MsgResponse struct {
-	Rsp string
-}
-
-type MsgBlock struct {
-	X int
-	Y int
-	R int
-	G int
-	B int
-	A int
-	W int
-	H int
 }
 
 const (
@@ -84,6 +71,10 @@ func (c *GbWsConn) AttachReader(reader chan MessageIn) {
 
 // Serializes an object and sends it across the the wire
 func (c *GbWsConn) Send(msg interface{}) error {
+	if c.send == nil {
+		return ConnErrorSendClosed
+	}
+
 	marshaled, err := json.Marshal(msg)
 	if err != nil {
 		log.Println("ERROR", "Connection", c.id, "Failed to marshal data to send to client")
@@ -95,8 +86,15 @@ func (c *GbWsConn) Send(msg interface{}) error {
 
 // Closes the send and attached reader channels
 func (c *GbWsConn) Close() {
-	close(c.send)
-	close(c.reader)
+	if c.send != nil {
+		close(c.send)
+	}
+	if c.reader != nil {
+		close(c.reader)
+	}
+
+	c.send = nil
+	c.reader = nil
 }
 
 // Handler furnction for periodic reading from the input socks.
@@ -129,6 +127,11 @@ func (c *GbWsConn) ReadPump() {
 
 		var unmarshaled MessageIn
 		json.Unmarshal(message, &unmarshaled)
+
+		if c.reader == nil {
+			log.Println("GbWsConn failed to send to reader because chan closed")
+			return
+		}
 
 		c.reader <- unmarshaled
 	}
@@ -173,21 +176,21 @@ func (c *GbWsConn) WritePump() {
 	}
 }
 
+// Create a new instance of the go.net websocket
 func NewGnWsConn(id uint64, ws *gnws.Conn) *GnWsConn {
 	return &GnWsConn{
-		id:    id,
-		send:  make(chan interface{}, 256),
-		ws:    ws,
-		alive: true,
+		id:   id,
+		send: make(chan interface{}, 256),
+		ws:   ws,
 	}
 }
 
+// Connection object for use with the go.net websocket
 type GnWsConn struct {
 	id     uint64
 	reader chan MessageIn
 	send   chan interface{}
 	ws     *gnws.Conn
-	alive  bool
 }
 
 // Returns the connection's id
@@ -195,14 +198,26 @@ func (c GnWsConn) GetId() uint64 {
 	return c.id
 }
 
+// Adds a new reader to the go.net websocket connection
+// This channel will be notified when a message is received
+// from a connection.
 func (c *GnWsConn) AttachReader(reader chan MessageIn) {
 	c.reader = reader
 }
+
+// Sends an object which will be serialized and sent to the connection
 func (c *GnWsConn) Send(msg interface{}) error {
+	if c.send == nil {
+		return ConnErrorSendClosed
+	}
+
 	c.send <- msg
 	return nil
 }
+
+// Read event loop, terminates when read from client fails
 func (c *GnWsConn) ReadPump() {
+	defer func() { log.Println("Connection ", c.id, "read pump terminating") }()
 	for {
 		var msg MessageIn
 		err := gnws.JSON.Receive(c.ws, &msg)
@@ -214,7 +229,11 @@ func (c *GnWsConn) ReadPump() {
 		c.reader <- msg
 	}
 }
+
+// Write event loop, termintes when writes to the client fails, or the send to conn
+// channel is closed.
 func (c *GnWsConn) WritePump() {
+	defer func() { log.Println("Connection ", c.id, "write pump terminating") }()
 	for {
 		select {
 		case msg, ok := <-c.send:
@@ -231,12 +250,17 @@ func (c *GnWsConn) WritePump() {
 		}
 	}
 }
+
+// Closes all channels on the connection, and invalidates
+// their reference.
 func (c *GnWsConn) Close() {
-	if c.alive {
+	if c.send != nil {
 		close(c.send)
-		close(c.reader)
-		c.alive = false
-	} else {
-		log.Println("trying to close already closed connection")
 	}
+	if c.reader != nil {
+		close(c.reader)
+	}
+
+	c.send = nil
+	c.reader = nil
 }

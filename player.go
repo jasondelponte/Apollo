@@ -4,6 +4,16 @@ import (
 	"log"
 )
 
+type PlayerError struct {
+	PlayerErrorString string
+}
+
+func (p *PlayerError) Error() string { return p.PlayerErrorString }
+
+var (
+	PlayerErrorDisconnected = &PlayerError{"Player's connection has been disconnected"}
+)
+
 // Player object
 type Player struct {
 	id       uint64
@@ -21,28 +31,34 @@ func NewPlayer(id uint64, c Connection) *Player {
 	}
 
 	p.reader = make(chan MessageIn)
-	p.toPlayer = make(chan interface{})
+	p.toPlayer = make(chan interface{}, 10)
 	p.conn.AttachReader(p.reader)
 
 	return p
 }
 
+// Returns the player's id
 func (p Player) GetId() uint64 {
 	return p.id
 }
 
 // Terminates the player's connection
 func (p *Player) Disconnect() {
-	if p.conn == nil {
-		return
+	if p.conn != nil {
+		p.conn.Close()
+	}
+	if p.toPlayer != nil {
+		close(p.toPlayer)
 	}
 
-	p.conn.Close()
+	p.conn = nil
+	p.toPlayer = nil
 }
 
 // Event handler for a player. Will process events as they are
 // received from the player, world, or game
 func (p *Player) Run(w *World) {
+	defer func() { log.Println("Player ", p.id, " event loop terminating") }()
 	for {
 		select {
 		case msg, ok := <-p.reader:
@@ -66,9 +82,11 @@ func (p *Player) Run(w *World) {
 }
 
 // Pushes the message to the player asynchronously
-// TODO this is actually blocking until the player's event loop
-// can read from the channel, so the toPlayer chan should be
-// buffered with a go routine
-func (p *Player) SendToPlayer(msg interface{}) {
+func (p *Player) SendToPlayer(msg interface{}) error {
+	if p.toPlayer == nil {
+		return PlayerErrorDisconnected
+	}
+
 	p.toPlayer <- msg
+	return nil
 }

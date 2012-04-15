@@ -4,21 +4,32 @@ $(document).ready(function() {
 
     var _apollo = window.apolloApp;
 
-    function drawBlock(block) {
-        ctx.fillStyle = "rgba("+block.R+","+block.G+","+block.B+", 0."+block.A+")";
-        ctx.fillRect (block.X, block.Y, block.W, block.H);
+    function addBlock(block) {
+        ctx.fillStyle = "rgba("+block.R+","+block.G+","+block.B+",0."+block.A+")";
+        ctx.fillRect(block.X, block.Y, block.W, block.H);
     }
 
     if (window["WebSocket"]) {
-    	var wsURL = "ws://" + _apollo.host + _apollo.path + "/ws-gn";
+    	var wsURL = "ws://" + _apollo.host + _apollo.path + "/ws";
 
         conn = new WebSocket(wsURL);
         conn.onclose = function(evt) {
             console.log('Connection Closed');
         }
         conn.onmessage = function(evt) {
-            var block = JSON.parse(evt.data).Block;
-            drawBlock(block);
+            var msg = JSON.parse(evt.data);
+            if (msg.BU) { // Board updates
+                var updates = msg.BU;
+                for (var idx=0; idx < updates.length; idx++) {
+                    var update = updates[idx]
+
+                    if (update.T === 1) { // Update Type, Add
+                        if (update.E.T === 0) { // Entity Type Block
+                            addBlock(update.E);
+                        }
+                    }
+                }
+            }
         }
     } else {
         $('.no-websockets').removeClass('hidden');
