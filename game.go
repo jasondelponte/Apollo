@@ -26,7 +26,7 @@ type Game struct {
 	players      map[*Player]bool
 	addPlayer    chan *Player
 	removePlayer chan *Player
-	playerCtrl   chan interface{}
+	playerAction chan *PlayerAction
 }
 
 const (
@@ -43,13 +43,28 @@ func NewGame(id uint64) *Game {
 		players:      make(map[*Player]bool),
 		addPlayer:    make(chan *Player),
 		removePlayer: make(chan *Player),
-		playerCtrl:   make(chan interface{}),
+		playerAction: make(chan *PlayerAction),
 	}
 	return g
 }
 
 func (g Game) GetId() uint64 {
 	return g.id
+}
+
+// Returns if the game has reached its limit of players
+func (g *Game) IsFull() bool {
+	return false
+}
+
+// Signals the game to add a new player to the game
+func (g *Game) AddPlayer(p *Player) {
+	g.addPlayer <- p
+}
+
+// Signals the game to remove a player from the game
+func (g *Game) RemovePlayer(p *Player) {
+	g.removePlayer <- p
 }
 
 // Event receiver to processing messages between the simulation and
@@ -69,8 +84,18 @@ func (g *Game) Run() {
 		case p := <-g.addPlayer:
 			log.Printf("Adding player %d to game %d", p.GetId(), g.id)
 			g.players[p] = true
-			if len(g.players) == 1 {
+			if g.state == GameStateStopped {
 				g.startGame()
+			}
+
+			toP := g.sim.GetCurrentBoard()
+			if toP != nil {
+				g.playerUpdate(p, BuildBoardUpdateMessage(toP))
+			}
+
+			toA := g.sim.PlayerJoined(p)
+			if toA != nil {
+				g.broadcastUpdate(BuildBoardUpdateMessage(toA))
 			}
 
 		case p := <-g.removePlayer:
@@ -78,20 +103,32 @@ func (g *Game) Run() {
 			if g.players[p] {
 				delete(g.players, p)
 			}
-			if len(g.players) == 0 {
-				g.stopGame()
-			}
+			// if len(g.players) == 0 {
+			// 	g.stopGame()
+			// }
 
-		case <-g.playerCtrl:
-			// TODO do soemthing with the incomming player control object
+		case ctrl := <-g.playerAction:
+			if ctrl.Game.Command == PLAYER_CMD_GAME_REMOVE_ENTITY {
+				e := g.board.RemoveEntityById(ctrl.Game.EntityId)
+				if e != nil {
+					g.broadcastUpdate(BuildRemoveEntityMessage(e))
+				}
+			}
 		}
+	}
+}
+
+func (g *Game) playerUpdate(p *Player, update interface{}) {
+	err := p.SendToPlayer(update)
+	if err != nil {
+		g.RemovePlayer(p)
 	}
 }
 
 // Sends out an update to all players
 func (g *Game) broadcastUpdate(update interface{}) {
 	for p, _ := range g.players {
-		p.SendToPlayer(update)
+		g.playerUpdate(p, update)
 	}
 }
 
@@ -104,6 +141,7 @@ func (g *Game) startGame() {
 
 // Terminate the simulator, and remove its instance
 func (g *Game) stopGame() {
+	g.state = GameStateStopped
 	g.sim = nil
 	g.board = nil
 }
@@ -111,19 +149,4 @@ func (g *Game) stopGame() {
 // Returns the current state of the game
 func (g Game) getState() *GameState {
 	return g.state
-}
-
-// Returns if the game has reached its limit of players
-func (g *Game) IsFull() bool {
-	return false
-}
-
-// Signals the game to add a new player to the game
-func (g *Game) AddPlayer(p *Player) {
-	g.addPlayer <- p
-}
-
-// Signals the game to remove a player from the game
-func (g *Game) RemovePlayer(p *Player) {
-	g.removePlayer <- p
 }

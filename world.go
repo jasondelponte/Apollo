@@ -20,11 +20,17 @@ type World struct {
 	players    map[*Player]*PlayerInstance
 	games      []*Game
 
-	register   chan *Player
-	unregister chan *Player
-	playerCtrl chan interface{}
+	register     chan *Player
+	unregister   chan *Player
+	playerAction chan *PlayerAction
 
 	httpHndlr *HttpHandler
+}
+
+// Defines info about the player for this current instance 
+// being connected to the world
+type PlayerInstance struct {
+	Game *Game
 }
 
 // Initalization of the game object.game  It s being done in the package's
@@ -36,18 +42,12 @@ func NewWorld(httpHndlr *HttpHandler) *World {
 		players:    make(map[*Player]*PlayerInstance),
 		games:      make([]*Game, 0, 10),
 
-		register:   make(chan *Player),
-		unregister: make(chan *Player),
-		playerCtrl: make(chan interface{}),
-		httpHndlr:  httpHndlr,
+		register:     make(chan *Player),
+		unregister:   make(chan *Player),
+		playerAction: make(chan *PlayerAction),
+		httpHndlr:    httpHndlr,
 	}
 	return w
-}
-
-// Defines info about the player for this current instance 
-// being connected to the world
-type PlayerInstance struct {
-	Games []*Game
 }
 
 // Event receiver to processing messages between the simulation and
@@ -74,8 +74,17 @@ func (w *World) Run() {
 				log.Println("Failed to unregister player, ", err)
 			}
 
-		case <-w.playerCtrl:
-			// TODO do soemthing with the incomming player control object
+		case ctrl := <-w.playerAction:
+			info := w.players[ctrl.Player]
+			if info == nil {
+				ctrl.Player.Disconnect()
+				continue
+			}
+
+			// forward the control onto the game
+			if ctrl.Game != nil {
+				info.Game.playerAction <- ctrl
+			}
 		}
 	}
 }
@@ -84,12 +93,13 @@ func (w *World) Run() {
 // that is not full. If there are no available games a new one will be 
 // created.
 func (w *World) registerPlayer(p *Player) error {
-	w.players[p] = &PlayerInstance{Games: make([]*Game, 0, 5)}
+	g := w.getAvailableGame()
+
+	w.players[p] = &PlayerInstance{Game: g}
 
 	// Kick off the player's event loop
 	go p.Run(w)
 
-	g := w.getAvailableGame()
 	g.AddPlayer(p)
 
 	return nil
@@ -115,7 +125,7 @@ func (w *World) getAvailableGame() *Game {
 // newly created game is also returned.
 func (w *World) addNewGame() *Game {
 	g := NewGame(w.nextGameId)
-	w.nextGameId += 1
+	w.nextGameId++
 	w.games = append(w.games, g)
 	go g.Run()
 
@@ -130,9 +140,10 @@ func (w *World) removeGame(g *Game) {
 // Removes a player from the world and all games they are connected to
 func (w *World) unregisterPlayer(p *Player) error {
 	var rtrn error = nil
-	if w.players[p] != nil {
-		for _, g := range w.players[p].Games[:] {
-			g.RemovePlayer(p)
+	info := w.players[p]
+	if info != nil {
+		if info.Game != nil {
+			info.Game.RemovePlayer(p)
 		}
 		delete(w.players, p)
 		rtrn = WorldErrorPlayerNotRegistered

@@ -1,47 +1,58 @@
 package main
 
-import ()
+import (
+	"log"
+)
 
 type Board struct {
-	entities []*Entity
-	players  []*Player
+	entities map[*Entity]bool
 }
 
+// Creates and initialies a new board
 func NewBoard() *Board {
-	return &Board{entities: make([]*Entity, 0, 10), players: make([]*Player, 0, 5)}
+	return &Board{entities: make(map[*Entity]bool)}
 }
 
-func (b *Board) AddPlayer(p *Player) {
-	b.players = append(b.players, p)
-}
-
-func (b *Board) AddEntities(e []*Entity) {
-	slice := b.entities
-	orgLen := len(slice)
-	newLen := orgLen + len(e)
-	if newLen > cap(slice) { // reallocate
-		// Allocate double what we have, for future growth.
-		newSlice := make([]*Entity, 0, (newLen+1)*2)
-		copy(newSlice, slice)
-		slice = newSlice
-	}
-	slice = slice[0:newLen]
-	copy(slice[orgLen:newLen], e)
-
-	b.entities = slice
-}
-
+// Adds a single entity to the board
 func (b *Board) AddEntity(e *Entity) {
-	slice := b.entities
-	l := len(slice)
-	if l+1 > cap(slice) { // reallocate
-		// Allocate double what we have, for future growth.
-		newSlice := make([]*Entity, 0, (cap(slice)+1)*2)
-		copy(newSlice, slice)
-		slice = newSlice
-	}
-	slice = slice[0 : l+1]
-	slice[l+1] = e
+	log.Println("Adding new entitiy,", e.GetId())
+	b.entities[e] = true
+}
 
-	b.entities = slice
+// Returns an array of the current entities
+func (b *Board) GetEntities() []*Entity {
+	if len(b.entities) == 0 {
+		return nil
+	}
+
+	entities := make([]*Entity, len(b.entities))[:]
+	var count int = 0
+
+	for e, _ := range b.entities {
+		entities[count] = e
+		count++
+	}
+
+	return entities
+}
+
+// Removes an entity from the board. Returns true if the 
+// entity was found and removed, otherwise false is returned.
+func (b *Board) RemoveEntityById(id uint64) *Entity {
+	var found *Entity = nil
+	for e, _ := range b.entities {
+		if e.GetId() == id {
+			found = e
+			break
+		}
+	}
+
+	if found != nil {
+		log.Println("removeing entitiy,", id)
+		delete(b.entities, found)
+		return found
+	}
+
+	log.Println("Could not find and remove entitity,", id)
+	return nil
 }

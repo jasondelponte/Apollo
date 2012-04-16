@@ -171,7 +171,7 @@ func (h *HttpHandler) initServeGnWsHndlr(path string, world *World) {
 
 func (h *HttpHandler) kickOffPlayer(conn Connection, world *World) {
 	player := NewPlayer(h.nextWsConnId, conn)
-	h.nextWsConnId += 1
+	h.nextWsConnId++
 
 	defer func() {
 		log.Println("Player", player.GetId(), " connection closing, unregistering")

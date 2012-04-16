@@ -4,6 +4,10 @@ import (
 	"log"
 )
 
+const (
+	PLAYER_CMD_GAME_REMOVE_ENTITY = 0
+)
+
 type PlayerError struct {
 	PlayerErrorString string
 }
@@ -13,6 +17,20 @@ func (p *PlayerError) Error() string { return p.PlayerErrorString }
 var (
 	PlayerErrorDisconnected = &PlayerError{"Player's connection has been disconnected"}
 )
+
+type PlayerAction struct {
+	World  *PlayerWorldAction
+	Game   *PlayerGameAction
+	Player *Player
+}
+
+type PlayerWorldAction struct {
+}
+
+type PlayerGameAction struct {
+	Command  int
+	EntityId uint64
+}
 
 // Player object
 type Player struct {
@@ -65,10 +83,11 @@ func (p *Player) Run(w *World) {
 			if !ok {
 				return
 			}
-			log.Println("Received player message: ", msg)
-			// TODO Probably want to do something with this message
-			// instead of just forwarding it to the game.
-			// game.playerCtrl <- msg
+			log.Println("Received player message:")
+			if msg.Act != nil {
+				w.playerAction <- GetPlayerActionFromMessage(msg, p)
+			}
+
 		case msg, ok := <-p.toPlayer:
 			if !ok {
 				return
