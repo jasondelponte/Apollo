@@ -37,6 +37,7 @@ $(document).ready(function() {
 
     $('#game-board').click(function() {
         if (!conn || entities.length === 0) {
+            console.log('unable to send', conn, entities.length);
             return
         }
         entityRemove = {
@@ -47,6 +48,7 @@ $(document).ready(function() {
                 }
             }
         };
+        removeBlock(entities[0]);
         conn.send(JSON.stringify(entityRemove));
     });
 

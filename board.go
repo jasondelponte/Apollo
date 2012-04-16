@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"math/rand"
 )
 
 type Board struct {
@@ -48,11 +49,35 @@ func (b *Board) RemoveEntityById(id uint64) *Entity {
 	}
 
 	if found != nil {
-		log.Println("removeing entitiy,", id)
+		log.Println("Removing entity,", found.GetId())
+		found.state = ENTITY_STATE_REMOVED
 		delete(b.entities, found)
 		return found
 	}
 
 	log.Println("Could not find and remove entitity,", id)
+	return nil
+}
+
+// Returns an random entity
+func (b *Board) GetRandomEntity() *Entity {
+	i := 0
+	r := 0
+	n := len(b.entities)
+	if n <= 0 {
+		return nil
+	} else if n == 1 {
+		r = n
+	} else {
+		r = rand.Intn(n - 1)
+	}
+
+	for e, _ := range b.entities {
+		if i == r {
+			return e
+		}
+		i++
+	}
+
 	return nil
 }

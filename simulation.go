@@ -15,7 +15,27 @@ func NewSimulation(b *Board) *Simulation {
 }
 
 // Incremental update to the board, returns the entities updated
-func (s *Simulation) Step() *MsgBoardUpdates {
+func (s *Simulation) Step() []*Entity {
+	randLen := rand.Intn(5)
+	entities := make([]*Entity, 0, randLen)
+	for i := 0; i < randLen; i++ {
+		r := rand.Intn(9)
+		if r > 5 && r <= 9 {
+			entities = append(entities, s.addRandomBlock())
+
+		} else if r < 3 && r >= 0 {
+			e := s.board.GetRandomEntity()
+			if e == nil {
+				continue
+			}
+			entities = append(entities, s.board.RemoveEntityById(e.GetId()))
+		}
+	}
+
+	if len(entities) > 0 {
+		return entities
+	}
+
 	return nil
 }
 

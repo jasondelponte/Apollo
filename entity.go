@@ -3,7 +3,9 @@ package main
 import ()
 
 const (
-	ENTITY_TYPE_BLOCK = 0
+	ENTITY_TYPE_BLOCK    = 0
+	ENTITY_STATE_REMOVED = 0
+	ENTITY_STATE_ADDED   = 1
 )
 
 type EntityPos struct {
@@ -17,6 +19,7 @@ type EntityColor struct {
 type Entity struct {
 	id    uint64
 	typ   uint
+	state int
 	pos   *EntityPos
 	color *EntityColor
 }
@@ -25,6 +28,7 @@ type Entity struct {
 func NewBoxEntity(id uint64, pos *EntityPos, color *EntityColor) *Entity {
 	return &Entity{
 		id:    id,
+		state: ENTITY_STATE_ADDED,
 		typ:   ENTITY_TYPE_BLOCK,
 		pos:   pos,
 		color: color,

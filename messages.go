@@ -1,8 +1,7 @@
 package main
 
-const (
-	UPDATE_TYPE_ENTITY_REMOVE = 0
-	UPDATE_TYPE_ENTITY_ADD    = 1
+import (
+	"log"
 )
 
 // Incoming message container which contains all possible 
@@ -63,6 +62,7 @@ type MsgBoardUpdateItem struct {
 type MsgBlock struct {
 	ID uint64
 	T  int
+	S  int
 	X  int
 	Y  int
 	R  int
@@ -81,8 +81,12 @@ func BuildBoardUpdateMessage(updates []*Entity) interface{} {
 	}
 
 	for i, e := range updates[:] {
+		if e == nil {
+			log.Println("BuildBoardUpdateMessage, invalid entity at ", i)
+			continue
+		}
 		if e.typ == ENTITY_TYPE_BLOCK {
-			buildMsgBlockFromEntity(e, UPDATE_TYPE_ENTITY_ADD, &msg.BU[i])
+			buildMsgBlockFromEntity(e, &msg.BU[i])
 		}
 	}
 
@@ -90,24 +94,25 @@ func BuildBoardUpdateMessage(updates []*Entity) interface{} {
 }
 
 // Builds the message for an entity being remoed
-func BuildRemoveEntityMessage(e *Entity) interface{} {
+func BuildBoardUpdateMessageSingle(e *Entity) interface{} {
 	msg := &MsgBoardUpdates{
 		BU: make([]MsgBoardUpdateItem, 1),
 	}
 
 	if e.typ == ENTITY_TYPE_BLOCK {
-		buildMsgBlockFromEntity(e, UPDATE_TYPE_ENTITY_REMOVE, &msg.BU[0])
+		buildMsgBlockFromEntity(e, &msg.BU[0])
 	}
 
 	return msg
 }
 
 // Builds the message item for a block from an entity
-func buildMsgBlockFromEntity(entity *Entity, typ int, updateItem *MsgBoardUpdateItem) {
-	updateItem.T = typ
+func buildMsgBlockFromEntity(entity *Entity, updateItem *MsgBoardUpdateItem) {
+	updateItem.T = entity.state
 	updateItem.E = &MsgBlock{
 		ID: entity.id,
 		T:  ENTITY_TYPE_BLOCK,
+		S:  entity.state,
 		X:  entity.pos.x,
 		Y:  entity.pos.y,
 		W:  entity.pos.width,

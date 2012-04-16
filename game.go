@@ -73,12 +73,18 @@ func (g *Game) RemovePlayer(p *Player) {
 // simulation will be terminated.
 func (g *Game) Run() {
 	defer func() { log.Println("Game ", g.id, " event loop terminating") }()
+	ticker := time.NewTicker(delayBetweenSimStep)
+	defer ticker.Stop()
 	for {
 		select {
-		case <-time.After(delayBetweenSimStep):
-			update := g.sim.Step()
-			if update != nil {
-				g.broadcastUpdate(update)
+		case <-ticker.C:
+			if g.state != GameStateRunning {
+				continue
+			}
+
+			toA := g.sim.Step()
+			if toA != nil {
+				g.broadcastUpdate(BuildBoardUpdateMessage(toA))
 			}
 
 		case p := <-g.addPlayer:
@@ -103,15 +109,15 @@ func (g *Game) Run() {
 			if g.players[p] {
 				delete(g.players, p)
 			}
-			// if len(g.players) == 0 {
-			// 	g.stopGame()
-			// }
+			if len(g.players) == 0 {
+				g.stopGame()
+			}
 
 		case ctrl := <-g.playerAction:
 			if ctrl.Game.Command == PLAYER_CMD_GAME_REMOVE_ENTITY {
 				e := g.board.RemoveEntityById(ctrl.Game.EntityId)
 				if e != nil {
-					g.broadcastUpdate(BuildRemoveEntityMessage(e))
+					g.broadcastUpdate(BuildBoardUpdateMessageSingle(e))
 				}
 			}
 		}
