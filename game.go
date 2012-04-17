@@ -30,7 +30,7 @@ type Game struct {
 }
 
 const (
-	delayBetweenSimStep = (500 * time.Millisecond)
+	delayBetweenSimStep = (250 * time.Millisecond)
 )
 
 // Initalization of the game object.game  It s being done in the package's

@@ -16,7 +16,7 @@ func NewSimulation(b *Board) *Simulation {
 
 // Incremental update to the board, returns the entities updated
 func (s *Simulation) Step() []*Entity {
-	randLen := rand.Intn(5)
+	randLen := 1 //rand.Intn(3)
 	entities := make([]*Entity, 0, randLen)
 	for i := 0; i < randLen; i++ {
 		r := rand.Intn(9)
