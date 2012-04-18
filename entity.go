@@ -18,7 +18,7 @@ type EntityColor struct {
 
 type Entity struct {
 	id    uint64
-	typ   uint
+	typ   int
 	state int
 	pos   *EntityPos
 	color *EntityColor

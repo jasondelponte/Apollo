@@ -39,11 +39,6 @@ func (s *Simulation) Step() []*Entity {
 	return nil
 }
 
-// Returns a list of entities for the current board
-func (s *Simulation) GetCurrentBoard() []*Entity {
-	return s.board.GetEntities()
-}
-
 // Updates the board reflecting a new player has joined.
 func (s *Simulation) PlayerJoined(p *Player) []*Entity {
 	e := s.addRandomBlock()

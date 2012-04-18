@@ -68,21 +68,25 @@ var ApolloApp = (function(context){
     };
     WsConn.prototype.onMessage = function(evt) {
         var msg = JSON.parse(evt.data);
-        if (msg.BU) { // Board updates
-            var updates = msg.BU;
-            for (var idx=0; idx < updates.length; idx++) {
-                var update = updates[idx]
-
-                if (update.T === WsConn.UpdateTypes.entityAdd) { // Update Type, Add
-                    render.addEntity(update.E); 
+        if (msg.GU) { // Game board update
+            var entities = msg.Es;
+            var idx;
+            for (idx=0; idx < entities.length; idx++) {
+                var entity = entities[idx]
+                if (entity.S === WsConn.UpdateTypes.entityAdd) { // Update Type, Add
+                    render.addEntity(entity); 
                     // if (update.E.T === WsConn.EntityTypes.block) { // Entity Type Block
                     // }
-                } else if (update.T === WsConn.UpdateTypes.entityRemove) { // Update type, Remove
-                    render.removeEntityById(update.E.ID);
+                } else if (entity.S === WsConn.UpdateTypes.entityRemove) { // Update type, Remove
+                    render.removeEntityById(entity.Id);
                     // if (update.E.T === WsConn.EntityTypes.block) { // Entity type block
                     //     removeBlock(update.E);
                     // }
                 }
+            }
+            var players = msg.Ps;
+            if (players) {
+                render.setPlayers(players)
             }
         }
     };
@@ -94,7 +98,8 @@ var ApolloApp = (function(context){
         this.ctx = null;
         this.timer = null;
         this.entities = {};
-        this.changed
+        this.changed = false;
+        this.players = [];
     };
     Render.prototype.init = function() {
         if (this.canvas.getContext){
@@ -103,8 +108,11 @@ var ApolloApp = (function(context){
         }
         return false
     };
+    Render.prototype.setPlayers = function(players) {
+        this.players = players;
+    }
     Render.prototype.addEntity = function(e) {
-        this.entities[e.ID] = e;
+        this.entities[e.Id] = e;
         this.changed = true;
     };
     Render.prototype.removeEntityById = function(id) {
@@ -133,11 +141,20 @@ var ApolloApp = (function(context){
                 this.drawBlock(e);
             }
         }
+        var _players = this.players;
+        for (var idx = 0; idx < _players.length; idx++) {
+            this.drawPlayer(_players[idx], idx+1)
+        }
 
     };
     Render.prototype.drawBlock = function(block) {
         this.ctx.fillStyle = "rgba("+block.R+","+block.G+","+block.B+",0."+block.A+")";
         this.ctx.fillRect(block.X, block.Y, block.W, block.H);
+    }
+    Render.prototype.drawPlayer = function(player, slot) {
+        this.ctx.fillStyle = "#000";
+        this.ctx.font = "12pt Calibri";
+        this.ctx.fillText(player.N + ": " + player.S, 0, 20 * slot);
     }
 
 

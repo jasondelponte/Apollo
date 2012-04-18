@@ -46,10 +46,6 @@ func GetPlayerActionFromMessage(msg MessageIn, p *Player) *PlayerAction {
 	return action
 }
 
-// Response messages
-type MsgBoardCurrent struct {
-	E []interface{} // Entities
-}
 type MsgBoardUpdates struct {
 	BU []MsgBoardUpdateItem // Board Updates
 }
@@ -58,68 +54,87 @@ type MsgBoardUpdateItem struct {
 	E interface{} // Entity
 }
 
-// Message part for a block
-type MsgBlock struct {
-	ID uint64
-	T  int
+// Game update message
+type MsgGameUpdate struct {
+	GU bool
+	Ps []MsgPartPlayerInfo
+	Es []MsgPartEntity
+}
+type MsgPartPlayerInfo struct {
+	Id uint64
+	N  string
 	S  int
-	X  int
-	Y  int
-	R  int
-	G  int
-	B  int
-	A  int
-	W  int
-	H  int
+}
+type MsgPartEntity struct {
+	Id         uint64
+	T          int
+	S          int
+	X, Y, W, H int
+	R, G, B, A int
 }
 
-// Creates the board updated message. contains a list of updates
-// of the board's entities
-func BuildBoardUpdateMessage(updates []*Entity) interface{} {
-	msg := &MsgBoardUpdates{
-		BU: make([]MsgBoardUpdateItem, len(updates)),
+// Builds a game update message based on the list of the current elements.
+// and the player game info.
+func BuildGameUpdateMessage(players map[*Player]*GameScore, entities []*Entity) interface{} {
+	msg := &MsgGameUpdate{
+		GU: true,
+		Ps: BuildGameUpdatePlayersMessage(players),
+		Es: BuildGameUpdateEntitiesMessage(entities),
 	}
 
-	for i, e := range updates[:] {
-		if e == nil {
-			log.Println("BuildBoardUpdateMessage, invalid entity at ", i)
+	return msg
+}
+
+// Builds the player update message part
+func BuildGameUpdatePlayersMessage(players map[*Player]*GameScore) []MsgPartPlayerInfo {
+	if len(players) == 0 {
+		return nil
+	}
+
+	ps := make([]MsgPartPlayerInfo, len(players))
+	i := 0
+	for p, s := range players {
+		if p == nil || s == nil {
+			log.Println("BuildGameUpdatePlayersMessage, invalid player")
 			continue
 		}
-		if e.typ == ENTITY_TYPE_BLOCK {
-			buildMsgBlockFromEntity(e, &msg.BU[i])
+
+		ps[i].Id = p.GetId()
+		ps[i].N = s.Name
+		ps[i].S = s.Score
+		i++
+	}
+
+	return ps
+}
+
+// Builds the entity update message part
+func BuildGameUpdateEntitiesMessage(entities []*Entity) []MsgPartEntity {
+	if len(entities) == 0 {
+		return nil
+	}
+
+	es := make([]MsgPartEntity, len(entities))
+	for i, e := range entities[:] {
+		if e == nil {
+			log.Println("BuildGameUpdateEntitiesMessage, invalid entity at ", i)
+			continue
 		}
+
+		es[i].Id = e.id
+		es[i].T = e.typ
+		es[i].S = e.state
+		es[i].X = e.pos.x
+		es[i].Y = e.pos.y
+		es[i].W = e.pos.width
+		es[i].H = e.pos.height
+		es[i].R = e.color.red
+		es[i].G = e.color.green
+		es[i].B = e.color.blue
+		es[i].A = e.color.alpha
+
+		// Todo entity specific items
 	}
 
-	return msg
-}
-
-// Builds the message for an entity being remoed
-func BuildBoardUpdateMessageSingle(e *Entity) interface{} {
-	msg := &MsgBoardUpdates{
-		BU: make([]MsgBoardUpdateItem, 1),
-	}
-
-	if e.typ == ENTITY_TYPE_BLOCK {
-		buildMsgBlockFromEntity(e, &msg.BU[0])
-	}
-
-	return msg
-}
-
-// Builds the message item for a block from an entity
-func buildMsgBlockFromEntity(entity *Entity, updateItem *MsgBoardUpdateItem) {
-	updateItem.T = entity.state
-	updateItem.E = &MsgBlock{
-		ID: entity.id,
-		T:  ENTITY_TYPE_BLOCK,
-		S:  entity.state,
-		X:  entity.pos.x,
-		Y:  entity.pos.y,
-		W:  entity.pos.width,
-		H:  entity.pos.height,
-		R:  entity.color.red,
-		G:  entity.color.green,
-		B:  entity.color.blue,
-		A:  entity.color.alpha,
-	}
+	return es
 }

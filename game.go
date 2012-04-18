@@ -1,8 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"time"
+)
+
+const (
+	delayBetweenSimStep = (250 * time.Millisecond)
 )
 
 type GameState struct {
@@ -23,15 +28,16 @@ type Game struct {
 	sim          *Simulation
 	board        *Board
 	state        *GameState
-	players      map[*Player]bool
+	players      map[*Player]*GameScore
 	addPlayer    chan *Player
 	removePlayer chan *Player
 	playerAction chan *PlayerAction
 }
 
-const (
-	delayBetweenSimStep = (250 * time.Millisecond)
-)
+type GameScore struct {
+	Name  string
+	Score int
+}
 
 // Initalization of the game object.game  It s being done in the package's
 // global scope so the network event handler will have access to it when
@@ -40,7 +46,7 @@ func NewGame(id uint64) *Game {
 	g := &Game{
 		id:           id,
 		state:        GameStateStopped,
-		players:      make(map[*Player]bool),
+		players:      make(map[*Player]*GameScore),
 		addPlayer:    make(chan *Player),
 		removePlayer: make(chan *Player),
 		playerAction: make(chan *PlayerAction),
@@ -48,6 +54,7 @@ func NewGame(id uint64) *Game {
 	return g
 }
 
+// Returns the game's id
 func (g Game) GetId() uint64 {
 	return g.id
 }
@@ -84,29 +91,29 @@ func (g *Game) Run() {
 
 			toA := g.sim.Step()
 			if toA != nil {
-				g.broadcastUpdate(BuildBoardUpdateMessage(toA))
+				g.broadcastUpdate(BuildGameUpdateMessage(g.players, toA))
 			}
 
 		case p := <-g.addPlayer:
 			log.Printf("Adding player %d to game %d", p.GetId(), g.id)
-			g.players[p] = true
+			g.players[p] = &GameScore{Score: 0, Name: fmt.Sprintf("Player %d", p.GetId())}
 			if g.state == GameStateStopped {
 				g.startGame()
 			}
 
-			toP := g.sim.GetCurrentBoard()
+			toP := g.board.GetEntities()
 			if toP != nil {
-				g.playerUpdate(p, BuildBoardUpdateMessage(toP))
+				g.playerUpdate(p, BuildGameUpdateMessage(g.players, toP))
 			}
 
 			toA := g.sim.PlayerJoined(p)
 			if toA != nil {
-				g.broadcastUpdate(BuildBoardUpdateMessage(toA))
+				g.broadcastUpdate(BuildGameUpdateMessage(g.players, toA))
 			}
 
 		case p := <-g.removePlayer:
 			log.Printf("Removing player %d from game %d", p.GetId(), g.id)
-			if g.players[p] {
+			if g.players[p] != nil {
 				delete(g.players, p)
 			}
 			if len(g.players) == 0 {
@@ -114,16 +121,25 @@ func (g *Game) Run() {
 			}
 
 		case ctrl := <-g.playerAction:
+			var gs *GameScore
+			if gs = g.players[ctrl.Player]; gs == nil {
+				// Ignore players we don't know about, should we disconnect them?
+				continue
+			}
 			if ctrl.Game.Command == PLAYER_CMD_GAME_REMOVE_ENTITY {
 				e := g.board.RemoveEntityById(ctrl.Game.EntityId)
 				if e != nil {
-					g.broadcastUpdate(BuildBoardUpdateMessageSingle(e))
+					gs.Score++
+					es := make([]*Entity, 1)
+					es[0] = e
+					g.broadcastUpdate(BuildGameUpdateMessage(g.players, es))
 				}
 			}
 		}
 	}
 }
 
+// Processes an update from a player
 func (g *Game) playerUpdate(p *Player, update interface{}) {
 	err := p.SendToPlayer(update)
 	if err != nil {
