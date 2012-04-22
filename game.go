@@ -10,16 +10,19 @@ const (
 	delayBetweenSimStep = (250 * time.Millisecond)
 )
 
-type GameState struct {
-	s byte
-}
-
-func (s *GameState) State() byte { return s.s }
+type GameState int
+type GamePlayerState int
 
 var (
-	GameStateRunning = &GameState{s: 0}
-	GameStatePaused  = &GameState{s: 1}
-	GameStateStopped = &GameState{s: 2}
+	// Game state
+	GameStateRunning = GameState(0)
+	GameStatePaused  = GameState(1)
+	GameStateStopped = GameState(2)
+	// Game Player State 
+	GamePlayerStateAdded   = GamePlayerState(0)
+	GamePlayerStatePresent = GamePlayerState(1)
+	GamePlayerStateUpdated = GamePlayerState(2)
+	GamePlayerStateRemoved = GamePlayerState(3)
 )
 
 // Definition of the game object
@@ -27,16 +30,18 @@ type Game struct {
 	id           uint64
 	sim          *Simulation
 	board        *Board
-	state        *GameState
-	players      map[*Player]*GameScore
+	state        GameState
+	players      map[*Player]*GamePlayerInfo
 	addPlayer    chan *Player
 	removePlayer chan *Player
 	playerAction chan *PlayerAction
 }
 
-type GameScore struct {
-	Name  string
-	Score int
+type GamePlayerInfo struct {
+	PlayerId uint64
+	State    GamePlayerState
+	Name     string
+	Score    int
 }
 
 // Initalization of the game object.game  It s being done in the package's
@@ -46,7 +51,7 @@ func NewGame(id uint64) *Game {
 	g := &Game{
 		id:           id,
 		state:        GameStateStopped,
-		players:      make(map[*Player]*GameScore),
+		players:      make(map[*Player]*GamePlayerInfo),
 		addPlayer:    make(chan *Player),
 		removePlayer: make(chan *Player),
 		playerAction: make(chan *PlayerAction),
@@ -79,9 +84,11 @@ func (g *Game) RemovePlayer(p *Player) {
 // will be started, but as soon as the last player drops out the
 // simulation will be terminated.
 func (g *Game) Run() {
-	defer func() { log.Println("Game ", g.id, " event loop terminating") }()
 	ticker := time.NewTicker(delayBetweenSimStep)
-	defer ticker.Stop()
+	defer func() {
+		log.Println("Game ", g.id, " event loop terminating")
+		ticker.Stop()
+	}()
 	for {
 		select {
 		case <-ticker.C:
@@ -91,48 +98,79 @@ func (g *Game) Run() {
 
 			toA := g.sim.Step()
 			if toA != nil {
-				g.broadcastUpdate(BuildGameUpdateMessage(g.players, toA))
+				msg := MsgCreateGameUpdate()
+				msg.AddEntityUpdates(toA)
+				g.broadcastUpdate(msg)
 			}
 
 		case p := <-g.addPlayer:
 			log.Printf("Adding player %d to game %d", p.GetId(), g.id)
-			g.players[p] = &GameScore{Score: 0, Name: fmt.Sprintf("Player %d", p.GetId())}
+			pInfo := &GamePlayerInfo{
+				State:    GamePlayerStateAdded,
+				PlayerId: p.GetId(),
+				Score:    0,
+				Name:     fmt.Sprintf("Player %d", p.GetId()),
+			}
 			if g.state == GameStateStopped {
 				g.startGame()
 			}
 
 			toP := g.board.GetEntities()
 			if toP != nil {
-				g.playerUpdate(p, BuildGameUpdateMessage(g.players, toP))
+				msg := MsgCreateGameUpdate()
+				infos := make([]*GamePlayerInfo, len(g.players))
+				i := 0
+				for _, info := range g.players {
+					infos[i] = info
+					i++
+				}
+				msg.AddPlayerGameInfos(infos)
+				msg.AddEntityUpdates(toP)
+				g.playerUpdate(p, msg)
 			}
+			// Don't add the new player to our list until it has already been updated.
+			g.players[p] = pInfo
 
 			toA := g.sim.PlayerJoined(p)
 			if toA != nil {
-				g.broadcastUpdate(BuildGameUpdateMessage(g.players, toA))
+				msg := MsgCreateGameUpdate()
+				msg.AddPlayerGameInfo(pInfo, -1)
+				msg.AddEntityUpdates(toA)
+				g.broadcastUpdate(msg)
 			}
+			pInfo.State = GamePlayerStatePresent
 
 		case p := <-g.removePlayer:
 			log.Printf("Removing player %d from game %d", p.GetId(), g.id)
-			if g.players[p] != nil {
+			if pInfo := g.players[p]; pInfo != nil {
 				delete(g.players, p)
+
+				pInfo.State = GamePlayerStateRemoved
+				msg := MsgCreateGameUpdate()
+				msg.AddPlayerGameInfo(pInfo, -1)
+				g.broadcastUpdate(msg)
 			}
 			if len(g.players) == 0 {
 				g.stopGame()
 			}
 
 		case ctrl := <-g.playerAction:
-			var gs *GameScore
-			if gs = g.players[ctrl.Player]; gs == nil {
+			var pInfo *GamePlayerInfo
+			if pInfo = g.players[ctrl.Player]; pInfo == nil {
 				// Ignore players we don't know about, should we disconnect them?
 				continue
 			}
-			if ctrl.Game.Command == PLAYER_CMD_GAME_REMOVE_ENTITY {
+			if ctrl.Game.Command == PlayerCmdGameRemoveEntity {
 				e := g.board.RemoveEntityById(ctrl.Game.EntityId)
 				if e != nil {
-					gs.Score++
-					es := make([]*Entity, 1)
-					es[0] = e
-					g.broadcastUpdate(BuildGameUpdateMessage(g.players, es))
+					pInfo.Score++
+					pInfo.State = GamePlayerStateUpdated
+
+					msg := MsgCreateGameUpdate()
+					msg.AddPlayerGameInfo(pInfo, -1)
+					msg.AddEntityUpdate(e, -1)
+					g.broadcastUpdate(msg)
+					pInfo.State = GamePlayerStatePresent
 				}
 			}
 		}
@@ -169,6 +207,6 @@ func (g *Game) stopGame() {
 }
 
 // Returns the current state of the game
-func (g Game) getState() *GameState {
+func (g Game) getState() GameState {
 	return g.state
 }

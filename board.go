@@ -50,7 +50,7 @@ func (b *Board) RemoveEntityById(id uint64) *Entity {
 
 	if found != nil {
 		log.Println("Removing entity,", found.GetId())
-		found.state = ENTITY_STATE_REMOVED
+		found.state = EntityStateRemoved
 		delete(b.entities, found)
 		return found
 	}

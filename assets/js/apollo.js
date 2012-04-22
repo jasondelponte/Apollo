@@ -4,6 +4,24 @@ var ApolloApp = (function(context){
     var ws = null;
     var render = null;
 
+    function playerTouch(evt) {
+        var id = null;
+        for (id in render.entities) {
+            if (!render.entities.hasOwnProperty(id)) { continue; }
+            break;
+        }
+        if (id === null) { return; }
+        entityRemove = {
+            Act: {
+                G: {
+                    C: WsConn.PlayerCmd.GameRemoveEntity,
+                    E: parseInt(id)
+                }
+            }
+        };
+        ws.conn.send(JSON.stringify(entityRemove));
+    }
+
     function runApp(cfg) {
         config = cfg
         config.fps = 10;
@@ -23,23 +41,11 @@ var ApolloApp = (function(context){
         render.start(config.fps);
 
         // TODO really?...
-        config.canvas.bind('click', function() {
-            var id = null;
-            for (id in render.entities) {
-                if (!render.entities.hasOwnProperty(id)) { continue; }
-                break;
-            }
-            if (id === null) { return; }
-            entityRemove = {
-                Act: {
-                    G: {
-                        C: WsConn.PlayerCmd.GameRemoveEntity,
-                        E: parseInt(id)
-                    }
-                }
-            };
-            ws.conn.send(JSON.stringify(entityRemove));
-        });
+        if ('ontouchstart' in window) {
+            config.canvas.bind('touchstart', playerTouch); // Touch, https://dvcs.w3.org/hg/webevents/raw-file/tip/touchevents.html
+        } else {
+            config.canvas.bind('click', playerTouch); // Mouse
+        }
     }
 
 
@@ -50,7 +56,8 @@ var ApolloApp = (function(context){
     WsConn.PlayerCmd = {
         GameRemoveEntity: 0
     };
-    WsConn.UpdateTypes = {entityRemove: 0, entityAdd: 1};
+    WsConn.EntityUpdateTypes = {added: 0, present: 1, selected: 2, removed: 3};
+    WsConn.PlayerUpdateTypes = {added: 0, present: 1, updated: 2, removed: 3};
     WsConn.EntityTypes = {block:0};
     WsConn.prototype.open = function(url) {
         if (window["WebSocket"]) {
@@ -67,29 +74,57 @@ var ApolloApp = (function(context){
         this.conn = null
     };
     WsConn.prototype.onMessage = function(evt) {
+        // console.log(evt.data);
         var msg = JSON.parse(evt.data);
         if (msg.GU) { // Game board update
             var entities = msg.Es;
-            var idx;
-            for (idx=0; idx < entities.length; idx++) {
-                var entity = entities[idx]
-                if (entity.S === WsConn.UpdateTypes.entityAdd) { // Update Type, Add
-                    render.addEntity(entity); 
-                    // if (update.E.T === WsConn.EntityTypes.block) { // Entity Type Block
-                    // }
-                } else if (entity.S === WsConn.UpdateTypes.entityRemove) { // Update type, Remove
-                    render.removeEntityById(entity.Id);
-                    // if (update.E.T === WsConn.EntityTypes.block) { // Entity type block
-                    //     removeBlock(update.E);
-                    // }
-                }
+            if (entities) {
+                this.processEntityUpdate(entities)
             }
             var players = msg.Ps;
             if (players) {
-                render.setPlayers(players)
+                this.processPlayerUpdate(players)
             }
         }
     };
+    WsConn.prototype.processEntityUpdate = function(entities) {
+        var eLen = entities.length;
+        for (var idx=0; idx < eLen; idx++) {
+            var entity = entities[idx];
+            switch(entity.St) {
+                case WsConn.EntityUpdateTypes.added:
+                    render.addEntity(entity);
+                break;
+
+                case WsConn.EntityUpdateTypes.removed:
+                    render.removeEntityById(entity.Id);
+                break;
+            }
+        }
+    }
+    WsConn.prototype.processPlayerUpdate = function(players) {
+        var pLen = players.length;
+        for (var idx=0; idx < pLen; idx++) {
+            var player = players[idx];
+            switch (player.St) {
+                case WsConn.PlayerUpdateTypes.added:
+                    render.addPlayer(player);
+                break;
+
+                case WsConn.PlayerUpdateTypes.present:
+                    render.addPlayer(player);
+                break;
+
+                case WsConn.PlayerUpdateTypes.updated:
+                    render.updatePlayer(player)
+                break;
+
+                case WsConn.PlayerUpdateTypes.removed:
+                    render.removePlayer(player)
+                break;
+            }
+        }
+    }
 
 
     // Rendering for drawing 
@@ -101,6 +136,9 @@ var ApolloApp = (function(context){
         this.changed = false;
         this.players = [];
     };
+    Render.playerSort = function(a, b) {
+        return a.Id > b.Id;
+    };
     Render.prototype.init = function() {
         if (this.canvas.getContext){
             this.ctx = this.canvas.getContext('2d');
@@ -108,8 +146,37 @@ var ApolloApp = (function(context){
         }
         return false
     };
-    Render.prototype.setPlayers = function(players) {
-        this.players = players;
+    Render.prototype.addPlayer = function(player) {
+        var idx = this.findPlayer(player.Id);
+        if (idx !== -1) { return; }
+        this.players.push(player);
+    }
+    Render.prototype.removePlayer = function(player) {
+        var idx = this.findPlayer(player.Id);
+        if (idx !== -1) {
+            this.players.splice(idx, 1);
+        } else {
+            console.error('tried to removed a player I dont know about;', player);
+        }
+    }
+    Render.prototype.updatePlayer = function(player) {
+        var idx = this.findPlayer(player.Id);
+        if (idx !== -1) {
+            this.players[idx] = player;
+        } else {
+            console.error('tried to update a player I dont know about;', player);
+        }
+    }
+    Render.prototype.findPlayer = function(pId) {
+        var pLen =  this.players.length;
+        var idx;
+        for (idx=pLen-1; idx >= 0; idx--) {
+            var player = this.players[idx];
+            if (player.Id === pId) {
+                break;
+            }
+        }
+        return idx;
     }
     Render.prototype.addEntity = function(e) {
         this.entities[e.Id] = e;
@@ -145,7 +212,6 @@ var ApolloApp = (function(context){
         for (var idx = 0; idx < _players.length; idx++) {
             this.drawPlayer(_players[idx], idx+1)
         }
-
     };
     Render.prototype.drawBlock = function(block) {
         this.ctx.fillStyle = "rgba("+block.R+","+block.G+","+block.B+",0."+block.A+")";
@@ -154,7 +220,7 @@ var ApolloApp = (function(context){
     Render.prototype.drawPlayer = function(player, slot) {
         this.ctx.fillStyle = "#000";
         this.ctx.font = "12pt Calibri";
-        this.ctx.fillText(player.N + ": " + player.S, 0, 20 * slot);
+        this.ctx.fillText(player.N + ": " + player.Sc, 0, 20 * slot);
     }
 
 

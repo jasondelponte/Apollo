@@ -4,8 +4,10 @@ import (
 	"log"
 )
 
-const (
-	PLAYER_CMD_GAME_REMOVE_ENTITY = 0
+type PlayerCmd int
+
+var (
+	PlayerCmdGameRemoveEntity = PlayerCmd(0)
 )
 
 type PlayerError struct {
@@ -28,7 +30,7 @@ type PlayerWorldAction struct {
 }
 
 type PlayerGameAction struct {
-	Command  int
+	Command  PlayerCmd
 	EntityId uint64
 }
 
