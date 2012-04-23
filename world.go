@@ -146,6 +146,7 @@ func (w *World) unregisterPlayer(p *Player) error {
 			info.Game.RemovePlayer(p)
 		}
 		delete(w.players, p)
+	} else {
 		rtrn = WorldErrorPlayerNotRegistered
 	}
 	p.Disconnect()
