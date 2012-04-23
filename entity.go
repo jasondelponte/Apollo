@@ -1,7 +1,10 @@
 package main
 
-import ()
+import (
+	"time"
+)
 
+type EntityId uint64
 type EntityType int
 type EntityState int
 
@@ -24,25 +27,29 @@ type EntityColor struct {
 }
 
 type Entity struct {
-	id    uint64
-	typ   EntityType
-	state EntityState
-	pos   *EntityPos
-	color *EntityColor
+	id        EntityId
+	typ       EntityType
+	state     EntityState
+	ttl       time.Duration
+	createdAt time.Time
+	updatedAt time.Time
+	pos       *EntityPos
+	color     *EntityColor
 }
 
 // Create a new Entity as a Box
-func NewBoxEntity(id uint64, pos *EntityPos, color *EntityColor) *Entity {
+func NewBoxEntity(id EntityId, ttl time.Duration, pos *EntityPos, color *EntityColor) *Entity {
 	return &Entity{
 		id:    id,
 		state: EntityStateAdded,
 		typ:   EntityTypeBlock,
+		ttl:   ttl,
 		pos:   pos,
 		color: color,
 	}
 }
 
 // Returns the id for this entitiy
-func (e Entity) GetId() uint64 {
+func (e Entity) GetId() EntityId {
 	return e.id
 }

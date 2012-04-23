@@ -3,35 +3,45 @@ package main
 import (
 	"log"
 	"math/rand"
+	"time"
 )
 
+type EntityMap map[EntityId]*Entity
+
 type Board struct {
-	entities map[*Entity]bool
+	entities EntityMap
 }
 
 // Creates and initialies a new board
 func NewBoard() *Board {
-	return &Board{entities: make(map[*Entity]bool)}
+	return &Board{entities: make(EntityMap)}
 }
 
 // Adds a single entity to the board
 func (b *Board) AddEntity(e *Entity) {
 	log.Println("Adding new entitiy,", e.GetId())
-	b.entities[e] = true
+	e.createdAt = time.Now().UTC()
+	e.updatedAt = e.createdAt
+	b.entities[e.id] = e
+}
+
+// Returns the entity map on the board
+func (b *Board) GetEntities() EntityMap {
+	return b.entities
 }
 
 // Returns an array of the current entities
-func (b *Board) GetEntities() []*Entity {
+func (b *Board) GetEntityArray() []*Entity {
 	if len(b.entities) == 0 {
 		return nil
 	}
 
 	entities := make([]*Entity, len(b.entities))[:]
-	var count int = 0
 
-	for e, _ := range b.entities {
-		entities[count] = e
-		count++
+	i := 0
+	for _, e := range b.entities {
+		entities[i] = e
+		i++
 	}
 
 	return entities
@@ -39,23 +49,23 @@ func (b *Board) GetEntities() []*Entity {
 
 // Removes an entity from the board. Returns true if the 
 // entity was found and removed, otherwise false is returned.
-func (b *Board) RemoveEntityById(id uint64) *Entity {
-	var found *Entity = nil
-	for e, _ := range b.entities {
-		if e.GetId() == id {
-			found = e
+func (b *Board) RemoveEntityById(idS EntityId) *Entity {
+	var eFound *Entity
+	for id, e := range b.entities {
+		if id == idS {
+			eFound = e
 			break
 		}
 	}
 
-	if found != nil {
-		log.Println("Removing entity,", found.GetId())
-		found.state = EntityStateRemoved
-		delete(b.entities, found)
-		return found
+	if eFound != nil {
+		log.Println("Removing entity,", eFound.id)
+		eFound.state = EntityStateRemoved
+		delete(b.entities, eFound.id)
+		return eFound
 	}
 
-	log.Println("Could not find and remove entitity,", id)
+	log.Println("Could not find and remove entitity,", idS)
 	return nil
 }
 
@@ -72,7 +82,7 @@ func (b *Board) GetRandomEntity() *Entity {
 		r = rand.Intn(n - 1)
 	}
 
-	for e, _ := range b.entities {
+	for _, e := range b.entities {
 		if i == r {
 			return e
 		}

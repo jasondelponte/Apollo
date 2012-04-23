@@ -31,7 +31,7 @@ type PlayerWorldAction struct {
 
 type PlayerGameAction struct {
 	Command  PlayerCmd
-	EntityId uint64
+	EntityId EntityId
 }
 
 // Player object

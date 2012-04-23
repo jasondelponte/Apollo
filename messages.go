@@ -1,6 +1,8 @@
 package main
 
-import ()
+import (
+	"time"
+)
 
 // Incoming message container which contains all possible 
 // input message types
@@ -37,7 +39,7 @@ func GetPlayerActionFromMessage(msg MessageIn, p *Player) *PlayerAction {
 	if msg.Act.G != nil {
 		action.Game = &PlayerGameAction{
 			Command:  PlayerCmd(msg.Act.G.C),
-			EntityId: msg.Act.G.E,
+			EntityId: EntityId(msg.Act.G.E),
 		}
 	}
 
@@ -70,6 +72,8 @@ type MsgPartEntity struct {
 	St         int
 	X, Y, W, H int
 	R, G, B, A int
+	Ttl        time.Duration
+	CAt, UAt   time.Time
 }
 
 func MsgCreateGameUpdate() *MsgGameUpdate {
@@ -150,9 +154,12 @@ func (m *MsgGameUpdate) AddEntityUpdate(e *Entity, idx int) {
 		m.growEntityUpdatesToFit(1)
 	}
 
-	m.Es[i].Id = e.id
+	m.Es[i].Id = uint64(e.id)
 	m.Es[i].T = int(e.typ)
 	m.Es[i].St = int(e.state)
+	m.Es[i].Ttl = e.ttl
+	m.Es[i].CAt = e.createdAt
+	m.Es[i].UAt = e.updatedAt
 	m.Es[i].X = e.pos.x
 	m.Es[i].Y = e.pos.y
 	m.Es[i].W = e.pos.width

@@ -128,7 +128,7 @@ func (g *Game) addPlayer(p *Player) {
 	}
 
 	// Update the current player with the current state of the game
-	toP := g.board.GetEntities()
+	toP := g.board.GetEntityArray()
 	if toP != nil {
 		msg := MsgCreateGameUpdate()
 		infos := make([]*GamePlayerInfo, len(g.players))
