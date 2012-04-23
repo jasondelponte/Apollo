@@ -7,7 +7,7 @@ import (
 type PlayerCmd int
 
 var (
-	PlayerCmdGameRemoveEntity = PlayerCmd(0)
+	PlayerCmdGameSelectEntity = PlayerCmd(0)
 )
 
 type PlayerError struct {
@@ -121,7 +121,6 @@ func (p *Player) Run(w *World) {
 				p.gameCtrl = nil
 				continue
 			}
-
 			p.gameCtrl = *ctrl
 		}
 	}

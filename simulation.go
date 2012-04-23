@@ -39,14 +39,6 @@ func (s *Simulation) Step() []*Entity {
 	return nil
 }
 
-// Updates the board reflecting a new player has joined.
-func (s *Simulation) PlayerJoined(p *Player) []*Entity {
-	e := s.addRandomBlock()
-	entities := make([]*Entity, 1)
-	entities[0] = e
-	return entities
-}
-
 // Creates a new random block and adds it to the board
 // The reference to the block created will be returned
 func (s *Simulation) addRandomBlock() *Entity {

@@ -67,7 +67,7 @@ func (g Game) GetId() uint64 {
 
 // Returns if the game has reached its limit of players
 func (g *Game) IsFull() bool {
-	return false
+	return false // TODO use a load balancer for this in the world
 }
 
 // Event receiver to processing messages between the simulation and
@@ -86,86 +86,100 @@ func (g *Game) Run() {
 			if g.state != GameStateRunning {
 				continue
 			}
-
-			toA := g.sim.Step()
-			if toA != nil {
-				msg := MsgCreateGameUpdate()
-				msg.AddEntityUpdates(toA)
-				g.broadcastUpdate(msg)
-			}
+			g.simulate()
 
 		case p := <-g.AddPlayer:
 			log.Printf("Adding player %d to game %d", p.GetId(), g.id)
-			pInfo := &GamePlayerInfo{
-				State:    GamePlayerStateAdded,
-				PlayerId: p.GetId(),
-				Score:    0,
-				Name:     fmt.Sprintf("Player %d", p.GetId()),
-			}
-			if g.state == GameStateStopped {
-				g.startGame()
-			}
-
-			toP := g.board.GetEntities()
-			if toP != nil {
-				msg := MsgCreateGameUpdate()
-				infos := make([]*GamePlayerInfo, len(g.players))
-				i := 0
-				for _, info := range g.players {
-					infos[i] = info
-					i++
-				}
-				msg.AddPlayerGameInfos(infos)
-				msg.AddEntityUpdates(toP)
-				g.playerUpdate(p, msg)
-			}
-			// Don't add the new player to our list until it has already been updated.
-			g.players[p] = pInfo
-			p.SetGameCtrl(&g.playerCtrl)
-
-			toA := g.sim.PlayerJoined(p)
-			if toA != nil {
-				msg := MsgCreateGameUpdate()
-				msg.AddPlayerGameInfo(pInfo, -1)
-				msg.AddEntityUpdates(toA)
-				g.broadcastUpdate(msg)
-			}
-			pInfo.State = GamePlayerStatePresent
+			g.addPlayer(p)
 
 		case p := <-g.RmPlayer:
 			log.Printf("Removing player %d from game %d", p.GetId(), g.id)
-			if pInfo := g.players[p]; pInfo != nil {
-				delete(g.players, p)
-				p.SetGameCtrl(nil)
-
-				pInfo.State = GamePlayerStateRemoved
-				msg := MsgCreateGameUpdate()
-				msg.AddPlayerGameInfo(pInfo, -1)
-				g.broadcastUpdate(msg)
-			}
-			if len(g.players) == 0 {
-				g.stopGame()
-			}
+			g.removePlayer(p)
 
 		case ctrl := <-g.playerCtrl:
 			var pInfo *GamePlayerInfo
 			if pInfo = g.players[ctrl.Player]; pInfo == nil {
-				// Ignore players we don't know about, should we disconnect them?
+				// Ignore players we don't know about, TODO should we disconnect them?
 				continue
 			}
-			if ctrl.Game.Command == PlayerCmdGameRemoveEntity {
-				e := g.board.RemoveEntityById(ctrl.Game.EntityId)
-				if e != nil {
-					pInfo.Score++
-					pInfo.State = GamePlayerStateUpdated
+			g.procPlayerCtrl(ctrl, pInfo)
+		}
+	}
+}
+func (g *Game) simulate() {
+	toA := g.sim.Step()
+	if toA != nil {
+		msg := MsgCreateGameUpdate()
+		msg.AddEntityUpdates(toA)
+		g.broadcastUpdate(msg)
+	}
+}
 
-					msg := MsgCreateGameUpdate()
-					msg.AddPlayerGameInfo(pInfo, -1)
-					msg.AddEntityUpdate(e, -1)
-					g.broadcastUpdate(msg)
-					pInfo.State = GamePlayerStatePresent
-				}
-			}
+// Adds a new player to the game, and starting the game if needed.
+func (g *Game) addPlayer(p *Player) {
+	pInfo := &GamePlayerInfo{
+		State:    GamePlayerStateAdded,
+		PlayerId: p.GetId(),
+		Score:    0,
+		Name:     fmt.Sprintf("Player %d", p.GetId()),
+	}
+	if g.state != GameStateRunning {
+		g.startGame()
+	}
+
+	// Let all players now about the new player
+	msg := MsgCreateGameUpdate()
+	msg.AddPlayerGameInfo(pInfo, -1)
+	g.broadcastUpdate(msg)
+
+	// Update the current player with the current state of the game
+	toP := g.board.GetEntities()
+	if toP != nil {
+		msg := MsgCreateGameUpdate()
+		infos := make([]*GamePlayerInfo, len(g.players))
+		i := 0
+		for _, info := range g.players {
+			infos[i] = info
+			i++
+		}
+		msg.AddPlayerGameInfos(infos)
+		msg.AddEntityUpdates(toP)
+		g.playerUpdate(p, msg)
+	}
+	g.players[p] = pInfo
+	p.SetGameCtrl(&g.playerCtrl)
+}
+
+// Removes the passed in player from the game, and stops the game
+// if that is the last player to be removed.
+func (g *Game) removePlayer(p *Player) {
+	if pInfo := g.players[p]; pInfo != nil {
+		delete(g.players, p)
+		p.SetGameCtrl(nil)
+
+		pInfo.State = GamePlayerStateRemoved
+		msg := MsgCreateGameUpdate()
+		msg.AddPlayerGameInfo(pInfo, -1)
+		g.broadcastUpdate(msg)
+	}
+	if len(g.players) == 0 {
+		g.stopGame()
+	}
+}
+
+// Processes the player's control in relation to the game.
+func (g *Game) procPlayerCtrl(ctrl *PlayerAction, pInfo *GamePlayerInfo) {
+	if ctrl.Game.Command == PlayerCmdGameSelectEntity {
+		e := g.board.RemoveEntityById(ctrl.Game.EntityId)
+		if e != nil {
+			pInfo.Score++
+			pInfo.State = GamePlayerStateUpdated
+
+			msg := MsgCreateGameUpdate()
+			msg.AddPlayerGameInfo(pInfo, -1)
+			msg.AddEntityUpdate(e, -1)
+			g.broadcastUpdate(msg)
+			pInfo.State = GamePlayerStatePresent
 		}
 	}
 }

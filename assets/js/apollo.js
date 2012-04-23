@@ -14,7 +14,7 @@ var ApolloApp = (function(context){
         entityRemove = {
             Act: {
                 G: {
-                    C: WsConn.PlayerCmd.GameRemoveEntity,
+                    C: WsConn.PlayerGameCmd.selectEntity,
                     E: parseInt(id)
                 }
             }
@@ -53,9 +53,7 @@ var ApolloApp = (function(context){
     function WsConn() {
         this.conn = null;
     };
-    WsConn.PlayerCmd = {
-        GameRemoveEntity: 0
-    };
+    WsConn.PlayerGameCmd = {selectEntity: 0};
     WsConn.EntityUpdateTypes = {added: 0, present: 1, selected: 2, removed: 3};
     WsConn.PlayerUpdateTypes = {added: 0, present: 1, updated: 2, removed: 3};
     WsConn.EntityTypes = {block:0};
