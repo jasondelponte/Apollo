@@ -135,9 +135,10 @@ var ApolloApp = (function(context){
         this.entities = {};
         this.changed = false;
         this.players = [];
+        this.playersAdded = false;
     };
-    Render.playerSort = function(a, b) {
-        return a.Id > b.Id;
+    function playerSort (a, b) {
+        return a.Id - b.Id;
     };
     Render.prototype.init = function() {
         if (this.canvas.getContext){
@@ -150,6 +151,7 @@ var ApolloApp = (function(context){
         var idx = this.findPlayer(player.Id);
         if (idx !== -1) { return; }
         this.players.push(player);
+        this.playersAdded = true;
     }
     Render.prototype.removePlayer = function(player) {
         var idx = this.findPlayer(player.Id);
@@ -207,6 +209,10 @@ var ApolloApp = (function(context){
             if (e.T === WsConn.EntityTypes.block) {
                 this.drawBlock(e);
             }
+        }
+        if (this.playersAdded) {
+            this.players.sort(playerSort)
+            this.playersAdded = false;
         }
         var _players = this.players;
         for (var idx = 0; idx < _players.length; idx++) {

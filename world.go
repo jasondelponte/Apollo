@@ -81,10 +81,7 @@ func (w *World) Run() {
 				continue
 			}
 
-			// forward the control onto the game
-			if ctrl.Game != nil {
-				info.Game.playerAction <- ctrl
-			}
+			// TODO handle player world controls
 		}
 	}
 }
@@ -100,7 +97,7 @@ func (w *World) registerPlayer(p *Player) error {
 	// Kick off the player's event loop
 	go p.Run(w)
 
-	g.AddPlayer(p)
+	g.AddPlayer <- p
 
 	return nil
 }
@@ -143,7 +140,7 @@ func (w *World) unregisterPlayer(p *Player) error {
 	info := w.players[p]
 	if info != nil {
 		if info.Game != nil {
-			info.Game.RemovePlayer(p)
+			info.Game.RmPlayer <- p
 		}
 		delete(w.players, p)
 	} else {

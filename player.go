@@ -36,10 +36,12 @@ type PlayerGameAction struct {
 
 // Player object
 type Player struct {
-	id       uint64
-	conn     Connection
-	reader   chan MessageIn
-	toPlayer chan interface{}
+	id          uint64
+	conn        Connection
+	reader      chan MessageIn
+	toPlayer    chan interface{}
+	setGameCtrl chan *GamePlayerCtrl
+	gameCtrl    GamePlayerCtrl
 }
 
 // Creates a new intance of the player object, and attaches the
@@ -52,6 +54,7 @@ func NewPlayer(id uint64, c Connection) *Player {
 
 	p.reader = make(chan MessageIn)
 	p.toPlayer = make(chan interface{}, 10)
+	p.setGameCtrl = make(chan *GamePlayerCtrl)
 	p.conn.AttachReader(p.reader)
 
 	return p
@@ -70,9 +73,13 @@ func (p *Player) Disconnect() {
 	if p.toPlayer != nil {
 		close(p.toPlayer)
 	}
+	if p.setGameCtrl != nil {
+		close(p.setGameCtrl)
+	}
 
 	p.conn = nil
 	p.toPlayer = nil
+	p.setGameCtrl = nil
 }
 
 // Event handler for a player. Will process events as they are
@@ -85,9 +92,16 @@ func (p *Player) Run(w *World) {
 			if !ok {
 				return
 			}
-			log.Println("Received player message:")
 			if msg.Act != nil {
-				w.playerAction <- GetPlayerActionFromMessage(msg, p)
+				ctrl := GetPlayerActionFromMessage(msg, p)
+				// forward the control onto the world or game
+				if ctrl.Game != nil && p.gameCtrl != nil {
+					p.gameCtrl <- ctrl
+				}
+
+				if ctrl.World != nil {
+					w.playerAction <- ctrl
+				}
 			}
 
 		case msg, ok := <-p.toPlayer:
@@ -98,6 +112,17 @@ func (p *Player) Run(w *World) {
 				return
 			}
 			p.conn.Send(msg)
+
+		case ctrl, ok := <-p.setGameCtrl:
+			if !ok {
+				return
+			}
+			if ctrl == nil {
+				p.gameCtrl = nil
+				continue
+			}
+
+			p.gameCtrl = *ctrl
 		}
 	}
 }
@@ -109,5 +134,16 @@ func (p *Player) SendToPlayer(msg interface{}) error {
 	}
 
 	p.toPlayer <- msg
+	return nil
+}
+
+// Sets the channel a player should use to use to send controls
+// to the the game at on.
+func (p *Player) SetGameCtrl(ctrlChan *GamePlayerCtrl) error {
+	if p.setGameCtrl == nil {
+		return PlayerErrorDisconnected
+	}
+
+	p.setGameCtrl <- ctrlChan
 	return nil
 }

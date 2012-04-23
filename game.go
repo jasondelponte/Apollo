@@ -10,6 +10,7 @@ const (
 	delayBetweenSimStep = (250 * time.Millisecond)
 )
 
+type GamePlayerCtrl chan *PlayerAction
 type GameState int
 type GamePlayerState int
 
@@ -27,14 +28,14 @@ var (
 
 // Definition of the game object
 type Game struct {
-	id           uint64
-	sim          *Simulation
-	board        *Board
-	state        GameState
-	players      map[*Player]*GamePlayerInfo
-	addPlayer    chan *Player
-	removePlayer chan *Player
-	playerAction chan *PlayerAction
+	id         uint64
+	sim        *Simulation
+	board      *Board
+	state      GameState
+	players    map[*Player]*GamePlayerInfo
+	playerCtrl GamePlayerCtrl
+	AddPlayer  chan *Player
+	RmPlayer   chan *Player
 }
 
 type GamePlayerInfo struct {
@@ -49,12 +50,12 @@ type GamePlayerInfo struct {
 // receiving new player connections.
 func NewGame(id uint64) *Game {
 	g := &Game{
-		id:           id,
-		state:        GameStateStopped,
-		players:      make(map[*Player]*GamePlayerInfo),
-		addPlayer:    make(chan *Player),
-		removePlayer: make(chan *Player),
-		playerAction: make(chan *PlayerAction),
+		id:         id,
+		state:      GameStateStopped,
+		players:    make(map[*Player]*GamePlayerInfo),
+		playerCtrl: make(GamePlayerCtrl),
+		AddPlayer:  make(chan *Player),
+		RmPlayer:   make(chan *Player),
 	}
 	return g
 }
@@ -67,16 +68,6 @@ func (g Game) GetId() uint64 {
 // Returns if the game has reached its limit of players
 func (g *Game) IsFull() bool {
 	return false
-}
-
-// Signals the game to add a new player to the game
-func (g *Game) AddPlayer(p *Player) {
-	g.addPlayer <- p
-}
-
-// Signals the game to remove a player from the game
-func (g *Game) RemovePlayer(p *Player) {
-	g.removePlayer <- p
 }
 
 // Event receiver to processing messages between the simulation and
@@ -103,7 +94,7 @@ func (g *Game) Run() {
 				g.broadcastUpdate(msg)
 			}
 
-		case p := <-g.addPlayer:
+		case p := <-g.AddPlayer:
 			log.Printf("Adding player %d to game %d", p.GetId(), g.id)
 			pInfo := &GamePlayerInfo{
 				State:    GamePlayerStateAdded,
@@ -130,6 +121,7 @@ func (g *Game) Run() {
 			}
 			// Don't add the new player to our list until it has already been updated.
 			g.players[p] = pInfo
+			p.SetGameCtrl(&g.playerCtrl)
 
 			toA := g.sim.PlayerJoined(p)
 			if toA != nil {
@@ -140,10 +132,11 @@ func (g *Game) Run() {
 			}
 			pInfo.State = GamePlayerStatePresent
 
-		case p := <-g.removePlayer:
+		case p := <-g.RmPlayer:
 			log.Printf("Removing player %d from game %d", p.GetId(), g.id)
 			if pInfo := g.players[p]; pInfo != nil {
 				delete(g.players, p)
+				p.SetGameCtrl(nil)
 
 				pInfo.State = GamePlayerStateRemoved
 				msg := MsgCreateGameUpdate()
@@ -154,7 +147,7 @@ func (g *Game) Run() {
 				g.stopGame()
 			}
 
-		case ctrl := <-g.playerAction:
+		case ctrl := <-g.playerCtrl:
 			var pInfo *GamePlayerInfo
 			if pInfo = g.players[ctrl.Player]; pInfo == nil {
 				// Ignore players we don't know about, should we disconnect them?
@@ -181,7 +174,7 @@ func (g *Game) Run() {
 func (g *Game) playerUpdate(p *Player, update interface{}) {
 	err := p.SendToPlayer(update)
 	if err != nil {
-		g.RemovePlayer(p)
+		g.RmPlayer <- p
 	}
 }
 
