@@ -127,11 +127,6 @@ func (g *Game) addPlayer(p *Player) {
 		g.startGame()
 	}
 
-	// Let all players now about the new player
-	msg := MsgCreateGameUpdate()
-	msg.AddPlayerGameInfo(pInfo, -1)
-	g.broadcastUpdate(msg)
-
 	// Update the current player with the current state of the game
 	toP := g.board.GetEntities()
 	if toP != nil {
@@ -148,6 +143,11 @@ func (g *Game) addPlayer(p *Player) {
 	}
 	g.players[p] = pInfo
 	p.SetGameCtrl(&g.playerCtrl)
+
+	// Let all players now about the new player
+	msg := MsgCreateGameUpdate()
+	msg.AddPlayerGameInfo(pInfo, -1)
+	g.broadcastUpdate(msg)
 }
 
 // Removes the passed in player from the game, and stops the game
