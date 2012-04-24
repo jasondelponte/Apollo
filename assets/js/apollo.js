@@ -4,13 +4,7 @@ var ApolloApp = (function(context){
     var ws = null;
     var board = null;
 
-    function playerTouch(evt) {
-        var id = null;
-        for (id in render.entities) {
-            if (!render.entities.hasOwnProperty(id)) { continue; }
-            break;
-        }
-        if (id === null) { return; }
+    function selected(id) {
         entityRemove = {
             Act: {
                 G: {
@@ -36,13 +30,6 @@ var ApolloApp = (function(context){
             cfg.noWebSockets()
             return
         }
-
-        // TODO really?...
-        // if ('ontouchstart' in window) {
-        //     config.canvas.bind('touchstart', playerTouch); // Touch, https://dvcs.w3.org/hg/webevents/raw-file/tip/touchevents.html
-        // } else {
-        //     config.canvas.bind('click', playerTouch); // Mouse
-        // }
     }
 
 
@@ -155,7 +142,7 @@ var ApolloApp = (function(context){
             var idx;
             for (idx=pLen-1; idx >= 0; idx--) {
                 var player = players[idx];
-                if (player.Id === pId) {
+                if (player.Id === id) {
                     break;
                 }
             }
@@ -186,6 +173,9 @@ var ApolloApp = (function(context){
 
         // Entities
         function addEntity(entity) {
+            // Inore duplicate items
+            if (entities[entity.Id]) { return; }
+
             entity.color = entityColors[entity.C];
             var rect = new Kinetic.Rect({
                 x: entity.X,
@@ -194,17 +184,18 @@ var ApolloApp = (function(context){
                 height: entity.H,
                 fill:   entity.color,
                 stroke: "black",
-                strokeWidth: 4
+                strokeWidth: 2
             });
 
             entities[entity.Id] = {e: entity, d: rect};
             rect.on('click', function(evt) {
-                writeMsg(msgLayer, 'entity '+entity.Id+' selected');
+                selected(entity.Id);
             });
             entLayer.add(rect)
             entLayer.draw();
         }
         function updateEntity(entity) {
+            writeMsg(msgLayer, 'entity '+entity.Id+' selected');
             entities[entity.Id].e = entity;
         }
         function removeEntity(id) {

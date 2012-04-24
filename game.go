@@ -170,17 +170,18 @@ func (g *Game) removePlayer(p *Player) {
 // Processes the player's control in relation to the game.
 func (g *Game) procPlayerCtrl(ctrl *PlayerAction, pInfo *GamePlayerInfo) {
 	if ctrl.Game.Command == PlayerCmdGameSelectEntity {
-		e := g.board.RemoveEntityById(ctrl.Game.EntityId)
-		if e != nil {
-			pInfo.Score++
-			pInfo.State = GamePlayerStateUpdated
+		// TODO do matching based on what the player selected previously
+		pInfo.State = GamePlayerStateUpdated
+		e := g.board.GetEntityById(ctrl.Game.EntityId)
+		e.state = EntityStateSelected
 
-			msg := MsgCreateGameUpdate()
-			msg.AddPlayerGameInfo(pInfo, -1)
-			msg.AddEntityUpdate(e, -1)
-			g.broadcastUpdate(msg)
-			pInfo.State = GamePlayerStatePresent
-		}
+		msg := MsgCreateGameUpdate()
+		msg.AddPlayerGameInfo(pInfo, -1)
+		msg.AddEntityUpdate(e, -1)
+		g.broadcastUpdate(msg)
+
+		pInfo.State = GamePlayerStatePresent
+		e.state = EntityStatePresent
 	}
 }
 

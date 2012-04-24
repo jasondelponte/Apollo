@@ -47,25 +47,24 @@ func (b *Board) GetEntityArray() []*Entity {
 	return entities
 }
 
+// Returns an entity at the id specified
+func (b *Board) GetEntityById(id EntityId) *Entity {
+	return b.entities[id]
+}
+
 // Removes an entity from the board. Returns true if the 
 // entity was found and removed, otherwise false is returned.
-func (b *Board) RemoveEntityById(idS EntityId) *Entity {
-	var eFound *Entity
-	for id, e := range b.entities {
-		if id == idS {
-			eFound = e
-			break
-		}
+func (b *Board) RemoveEntityById(id EntityId) *Entity {
+	e := b.entities[id]
+
+	if e != nil {
+		log.Println("Removing entity,", e.id)
+		e.state = EntityStateRemoved
+		delete(b.entities, e.id)
+		return e
 	}
 
-	if eFound != nil {
-		log.Println("Removing entity,", eFound.id)
-		eFound.state = EntityStateRemoved
-		delete(b.entities, eFound.id)
-		return eFound
-	}
-
-	log.Println("Could not find and remove entitity,", idS)
+	log.Println("Could not find and remove entitity,", id)
 	return nil
 }
 
