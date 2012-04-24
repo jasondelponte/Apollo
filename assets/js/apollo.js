@@ -188,7 +188,7 @@ var ApolloApp = (function(context){
             });
 
             entities[entity.Id] = {e: entity, d: rect};
-            rect.on('click', function(evt) {
+            rect.on('mousedown touchstart', function(evt) {
                 selected(entity.Id);
             });
             entLayer.add(rect)
@@ -202,7 +202,7 @@ var ApolloApp = (function(context){
             if (entities[id] && entities[id].d) {
                 d = entities[id].d;
                 d.clearData();
-                d.off('click');
+                d.off('mousedown touchstart');
                 entLayer.remove(d);
             }
             delete entities[id];
