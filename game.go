@@ -173,6 +173,10 @@ func (g *Game) procPlayerCtrl(ctrl *PlayerAction, pInfo *GamePlayerInfo) {
 		// TODO do matching based on what the player selected previously
 		pInfo.State = GamePlayerStateUpdated
 		e := g.board.GetEntityById(ctrl.Game.EntityId)
+		if e == nil { // the id wasn't found so ignore
+			return
+		}
+
 		e.state = EntityStateSelected
 
 		msg := MsgCreateGameUpdate()
