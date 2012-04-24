@@ -84,7 +84,7 @@ func (s *Simulation) addNew(list []*Entity) []*Entity {
 func (s *Simulation) addRandomBlock() *Entity {
 	e := NewBoxEntity(s.nextEntityId,
 		time.Duration(rand.Intn(2500)+2500)*time.Millisecond,
-		EntityPos{x: rand.Intn(320), y: rand.Intn(480), width: 30, height: 30},
+		EntityPos{x: rand.Intn(600), y: rand.Intn(900), width: 100, height: 100},
 		rand.Intn(5),
 	)
 	s.nextEntityId++

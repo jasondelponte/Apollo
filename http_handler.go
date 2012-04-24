@@ -84,8 +84,8 @@ func (h *HttpHandler) initServeHomeHndlr(path string, world *World) {
 		"Host":        "",
 		"WsHost":      "",
 		"RootPath":    h.RootURLPath,
-		"BoardWidth":  "320",
-		"BoardHeight": "480",
+		"BoardWidth":  "640",
+		"BoardHeight": "960",
 	}
 
 	hostPortRep := regexp.MustCompile(":\\d+$")
