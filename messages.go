@@ -67,13 +67,13 @@ type MsgPartPlayerInfo struct {
 	Sc int    // Score
 }
 type MsgPartEntity struct {
-	Id         uint64
-	T          int
-	St         int
-	X, Y, W, H int
-	R, G, B, A int
-	Ttl        time.Duration
-	CAt, UAt   time.Time
+	Id         uint64 // entity ID
+	T          int    // Type of the entity
+	St         int    // State of the entity
+	X, Y, W, H int    // position
+	C          int    // color
+	Ttl        int64  // Time to live, in miliseconds
+	CAt, UAt   int64  // Create and Update Time
 }
 
 func MsgCreateGameUpdate() *MsgGameUpdate {
@@ -157,15 +157,12 @@ func (m *MsgGameUpdate) AddEntityUpdate(e *Entity, idx int) {
 	m.Es[i].Id = uint64(e.id)
 	m.Es[i].T = int(e.typ)
 	m.Es[i].St = int(e.state)
-	m.Es[i].Ttl = e.ttl
-	m.Es[i].CAt = e.createdAt
-	m.Es[i].UAt = e.updatedAt
+	m.Es[i].Ttl = int64(e.ttl / time.Millisecond)
+	m.Es[i].CAt = e.createdAt.Unix()
+	m.Es[i].UAt = e.updatedAt.Unix()
 	m.Es[i].X = e.pos.x
 	m.Es[i].Y = e.pos.y
 	m.Es[i].W = e.pos.width
 	m.Es[i].H = e.pos.height
-	m.Es[i].R = e.color.red
-	m.Es[i].G = e.color.green
-	m.Es[i].B = e.color.blue
-	m.Es[i].A = e.color.alpha
+	m.Es[i].C = e.color
 }

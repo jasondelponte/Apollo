@@ -67,7 +67,7 @@ func (s *Simulation) Step() []*Entity {
 	return nil
 }
 
-// Adds new intities and updates the list as needed
+// Adds new entities and updates the list as needed
 func (s *Simulation) addNew(list []*Entity) []*Entity {
 	c := rand.Intn(3)
 	for i := 0; i < c; i++ {
@@ -84,17 +84,10 @@ func (s *Simulation) addNew(list []*Entity) []*Entity {
 func (s *Simulation) addRandomBlock() *Entity {
 	e := NewBoxEntity(s.nextEntityId,
 		time.Duration(rand.Intn(2500)+2500)*time.Millisecond,
-		&EntityPos{
-			x: rand.Intn(285), y: rand.Intn(285),
-			width: 30, height: 30,
-		},
-		&EntityColor{
-			red: rand.Intn(255), green: rand.Intn(255), blue: rand.Intn(255),
-			alpha: rand.Intn(50) + 50,
-		},
+		EntityPos{x: rand.Intn(320), y: rand.Intn(480), width: 30, height: 30},
+		rand.Intn(5),
 	)
 	s.nextEntityId++
-
 	s.board.AddEntity(e)
 	return e
 }

@@ -13,7 +13,9 @@
     $(document).ready(function() {
         window.apolloApp = ApolloApp.runApp({
             wsURL: "ws://" + {{.WsHost}} + {{.RootPath}} + "/ws",
-            canvas: $('#game-board'),
+            container: 'game-board',
+            width: parseInt({{.BoardWidth}}),
+            height: parseInt({{.BoardHeight}}),
             noCanvas: function() {
                 $('.no-canvas').removeClass('hidden');
             },
@@ -26,9 +28,8 @@
 
 </head>
 <body>
-<canvas id="game-board" width="300" height="300">
-    <p class="no-canvas hidden">Sorry Canvas is not available on your browser...</p>
-</canvas>
+<div id="game-board"></div>
+<p class="no-canvas hidden">Sorry Canvas is not available on your browser...</p>
 <p class="no-websockets hidden">Sorry Your browser doesn't support websockets</p>
 </body>
 </html>

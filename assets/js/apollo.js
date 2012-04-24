@@ -2,7 +2,7 @@
 var ApolloApp = (function(context){
     var config = null;
     var ws = null;
-    var render = null;
+    var board = null;
 
     function playerTouch(evt) {
         var id = null;
@@ -22,36 +22,34 @@ var ApolloApp = (function(context){
         ws.conn.send(JSON.stringify(entityRemove));
     }
 
+
     function runApp(cfg) {
-        config = cfg
-        config.fps = 10;
-
-        render = new Render(config.canvas[0]);
-        if (!render.init()) {
-            config.noCanvas();
+        // Canvas 2d must be supported before we can run
+        if (!window.CanvasRenderingContext2D) {
+            cfg.noCanvas();
             return
         }
+        board = newGameBoard(cfg.container, cfg.width, cfg.height)
 
-        ws = new WsConn();
-        if (!ws.open(config.wsURL)) {
-            config.noWebSockets()
+        ws = new WsConn(board);
+        if (!ws.open(cfg.wsURL)) {
+            cfg.noWebSockets()
             return
         }
-        
-        render.start(config.fps);
 
         // TODO really?...
-        if ('ontouchstart' in window) {
-            config.canvas.bind('touchstart', playerTouch); // Touch, https://dvcs.w3.org/hg/webevents/raw-file/tip/touchevents.html
-        } else {
-            config.canvas.bind('click', playerTouch); // Mouse
-        }
+        // if ('ontouchstart' in window) {
+        //     config.canvas.bind('touchstart', playerTouch); // Touch, https://dvcs.w3.org/hg/webevents/raw-file/tip/touchevents.html
+        // } else {
+        //     config.canvas.bind('click', playerTouch); // Mouse
+        // }
     }
 
 
     // Webseocket wrapper object
-    function WsConn() {
+    function WsConn(board) {
         this.conn = null;
+        this.board = board
     };
     WsConn.PlayerGameCmd = {selectEntity: 0};
     WsConn.EntityUpdateTypes = {added: 0, present: 1, selected: 2, removed: 3};
@@ -91,11 +89,19 @@ var ApolloApp = (function(context){
             var entity = entities[idx];
             switch(entity.St) {
                 case WsConn.EntityUpdateTypes.added:
-                    render.addEntity(entity);
+                    this.board.addEntity(entity);
+                break;
+
+                case WsConn.EntityUpdateTypes.present:
+                    this.board.addEntity(entity);
+                break;
+                
+                case WsConn.EntityUpdateTypes.selected:
+                    this.board.updateEntity(entity);
                 break;
 
                 case WsConn.EntityUpdateTypes.removed:
-                    render.removeEntityById(entity.Id);
+                    this.board.removeEntity(entity.Id);
                 break;
             }
         }
@@ -106,127 +112,141 @@ var ApolloApp = (function(context){
             var player = players[idx];
             switch (player.St) {
                 case WsConn.PlayerUpdateTypes.added:
-                    render.addPlayer(player);
+                    this.board.addPlayer(player);
                 break;
 
                 case WsConn.PlayerUpdateTypes.present:
-                    render.addPlayer(player);
+                    this.board.addPlayer(player);
                 break;
 
                 case WsConn.PlayerUpdateTypes.updated:
-                    render.updatePlayer(player)
+                    this.board.updatePlayer(player)
                 break;
 
                 case WsConn.PlayerUpdateTypes.removed:
-                    render.removePlayer(player)
+                    this.board.removePlayer(player.Id)
                 break;
             }
         }
     }
 
 
-    // Rendering for drawing 
-    function Render(canvas) {
-        this.canvas = canvas;
-        this.ctx = null;
-        this.timer = null;
-        this.entities = {};
-        this.changed = false;
-        this.players = [];
-        this.playersAdded = false;
-    };
-    function playerSort (a, b) {
-        return a.Id - b.Id;
-    };
-    Render.prototype.init = function() {
-        if (this.canvas.getContext){
-            this.ctx = this.canvas.getContext('2d');
-            return true
+
+    function newGameBoard(container, width, height) {
+        var entityColors = ['red', 'blue', 'green', 'gray', 'orange'];
+        var stage = null,
+            playerLayer = null,
+            msgLayer = null,
+            entLayer = null,
+            players  = [],
+            entities = [];
+
+        function writeMsg(layer, msg) {
+            var context = layer.getContext();
+            layer.clear();
+            context.font = "18pt Calibri";
+            context.fillStyle = "black";
+            context.fillText(msg, 10, 25);
         }
-        return false
-    };
-    Render.prototype.addPlayer = function(player) {
-        var idx = this.findPlayer(player.Id);
-        if (idx !== -1) { return; }
-        this.players.push(player);
-        this.playersAdded = true;
-    }
-    Render.prototype.removePlayer = function(player) {
-        var idx = this.findPlayer(player.Id);
-        if (idx !== -1) {
-            this.players.splice(idx, 1);
-        } else {
-            console.error('tried to removed a player I dont know about;', player);
+
+        // Players
+        function findPlayer(id) {
+            var pLen =  players.length;
+            var idx;
+            for (idx=pLen-1; idx >= 0; idx--) {
+                var player = players[idx];
+                if (player.Id === pId) {
+                    break;
+                }
+            }
+            return idx;
         }
-    }
-    Render.prototype.updatePlayer = function(player) {
-        var idx = this.findPlayer(player.Id);
-        if (idx !== -1) {
-            this.players[idx] = player;
-        } else {
-            console.error('tried to update a player I dont know about;', player);
+        function addPlayer(player) {
+            var idx = findPlayer(player.Id);
+            if (idx !== -1) { return; }
+            players.push(player);
+            playersAdded = true;
         }
-    }
-    Render.prototype.findPlayer = function(pId) {
-        var pLen =  this.players.length;
-        var idx;
-        for (idx=pLen-1; idx >= 0; idx--) {
-            var player = this.players[idx];
-            if (player.Id === pId) {
-                break;
+        function removePlayer(id) {
+            var idx = findPlayer(id);
+            if (idx !== -1) {
+                players.splice(idx, 1);
+            } else {
+                console.error('tried to removed a player I dont know about;', player);
             }
         }
-        return idx;
-    }
-    Render.prototype.addEntity = function(e) {
-        this.entities[e.Id] = e;
-        this.changed = true;
-    };
-    Render.prototype.removeEntityById = function(id) {
-        delete this.entities[id];
-        this.changed = true;
-    };
-    Render.prototype.start = function(fps) {
-        var interval = 1000 / fps; // calculate frames per second as interval
-        var r = this;
-        this.timer = setInterval(function() {
-            r.draw();
-        }, interval);
-    };
-    Render.prototype.draw = function() {
-        if (!this.changed) { return; }
-        this.changed = false;
-
-        // It is very inefficent to be clearing the whole canvase each time
-        // and we should not be referencing wsConn's statics. they should
-        // be building objects we can injest instead of the messages.
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
-        var _entities = this.entities;
-        for (var id in _entities) {
-            var e = _entities[id];
-            if (e.T === WsConn.EntityTypes.block) {
-                this.drawBlock(e);
+        function updatePlayer(player) {
+            var idx = findPlayer(player.Id);
+            if (idx !== -1) {
+                players[idx] = player;
+            } else {
+                console.error('tried to update a player I dont know about;', player);
             }
         }
-        if (this.playersAdded) {
-            this.players.sort(playerSort)
-            this.playersAdded = false;
-        }
-        var _players = this.players;
-        for (var idx = 0; idx < _players.length; idx++) {
-            this.drawPlayer(_players[idx], idx+1)
-        }
-    };
-    Render.prototype.drawBlock = function(block) {
-        this.ctx.fillStyle = "rgba("+block.R+","+block.G+","+block.B+",0."+block.A+")";
-        this.ctx.fillRect(block.X, block.Y, block.W, block.H);
-    }
-    Render.prototype.drawPlayer = function(player, slot) {
-        this.ctx.fillStyle = "#000";
-        this.ctx.font = "12pt Calibri";
-        this.ctx.fillText(player.N + ": " + player.Sc, 0, 20 * slot);
-    }
 
+        // Entities
+        function addEntity(entity) {
+            entity.color = entityColors[entity.C];
+            var rect = new Kinetic.Rect({
+                x: entity.X,
+                y: entity.Y,
+                width:  entity.W,
+                height: entity.H,
+                fill:   entity.color,
+                stroke: "black",
+                strokeWidth: 4
+            });
+
+            entities[entity.Id] = {e: entity, d: rect};
+            rect.on('click', function(evt) {
+                writeMsg(msgLayer, 'entity '+entity.Id+' selected');
+            });
+            entLayer.add(rect)
+            entLayer.draw();
+        }
+        function updateEntity(entity) {
+            entities[entity.Id].e = entity;
+        }
+        function removeEntity(id) {
+            if (entities[id] && entities[id].d) {
+                d = entities[id].d;
+                d.clearData();
+                d.off('click');
+                entLayer.remove(d);
+            }
+            delete entities[id];
+            entLayer.draw();
+        }
+
+        function init() {
+            stage = new Kinetic.Stage({
+                container: container,
+                width: width, height: height
+            });
+
+            playerLayer = new Kinetic.Layer();
+            msgLayer = new Kinetic.Layer();
+            entLayer = new Kinetic.Layer();
+
+            stage.add(entLayer);
+            stage.add(playerLayer);
+            stage.add(msgLayer);
+        }
+
+
+        // Initialize the game board
+        init();
+
+
+        return {
+            addPlayer:    addPlayer,
+            removePlayer: removePlayer,
+            updatePlayer: updatePlayer,
+            addEntity:    addEntity,
+            updateEntity: updateEntity,
+            removeEntity: removeEntity,
+        }
+    }
 
     return {
         runApp: runApp,

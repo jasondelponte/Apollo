@@ -22,10 +22,6 @@ type EntityPos struct {
 	x, y, width, height int
 }
 
-type EntityColor struct {
-	red, green, blue, alpha int
-}
-
 type Entity struct {
 	id        EntityId
 	typ       EntityType
@@ -33,12 +29,12 @@ type Entity struct {
 	ttl       time.Duration
 	createdAt time.Time
 	updatedAt time.Time
-	pos       *EntityPos
-	color     *EntityColor
+	pos       EntityPos
+	color     int
 }
 
 // Create a new Entity as a Box
-func NewBoxEntity(id EntityId, ttl time.Duration, pos *EntityPos, color *EntityColor) *Entity {
+func NewBoxEntity(id EntityId, ttl time.Duration, pos EntityPos, color int) *Entity {
 	return &Entity{
 		id:    id,
 		state: EntityStateAdded,
