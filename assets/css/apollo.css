@@ -5,17 +5,16 @@
 html, body {
     width: 100%;
     height: 100%;
+}
+html, body, div, p, canvas {
     margin: 0;
     padding: 0;
 }
-
 body {
     background: gray;
 }
 
 #game-board {
-    width: 100%;
-    height: 100%;
     background: white;
 
 }

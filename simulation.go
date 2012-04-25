@@ -71,8 +71,8 @@ func (s *Simulation) Step() []*Entity {
 func (s *Simulation) addNew(list []*Entity) []*Entity {
 	c := rand.Intn(3)
 	for i := 0; i < c; i++ {
-		if rand.Intn(10) >= 8 {
-			list = append(list, s.addRandomBlock())
+		if e := s.addRandomBlock(); e != nil {
+			list = append(list, e)
 		}
 	}
 
@@ -82,9 +82,16 @@ func (s *Simulation) addNew(list []*Entity) []*Entity {
 // Creates a new random block and adds it to the board
 // The reference to the block created will be returned
 func (s *Simulation) addRandomBlock() *Entity {
+	x := rand.Intn(s.board.Cols - 1)
+	y := rand.Intn(s.board.Rows - 1)
+	if s.board.EntityAtPos(x, y) {
+		// don't create duplicate blocks at the same point
+		return nil
+	}
+
 	e := NewBoxEntity(s.nextEntityId,
 		time.Duration(rand.Intn(2500)+2500)*time.Millisecond,
-		EntityPos{x: rand.Intn(600), y: rand.Intn(900), width: 100, height: 100},
+		x, y,
 		rand.Intn(5),
 	)
 	s.nextEntityId++

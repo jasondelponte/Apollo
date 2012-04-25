@@ -14,8 +14,6 @@
         window.apolloApp = ApolloApp.runApp({
             wsURL: "ws://" + {{.WsHost}} + {{.RootPath}} + "/ws",
             container: 'game-board',
-            width: parseInt({{.BoardWidth}}),
-            height: parseInt({{.BoardHeight}}),
             noCanvas: function() {
                 $('.no-canvas').removeClass('hidden');
             },

@@ -13,6 +13,9 @@ const (
 type GamePlayerCtrl chan *PlayerAction
 type GameState int
 type GamePlayerState int
+type GameType struct {
+	Rows, Cols, Players int
+}
 
 var (
 	// Game state
@@ -24,11 +27,14 @@ var (
 	GamePlayerStatePresent = GamePlayerState(1)
 	GamePlayerStateUpdated = GamePlayerState(2)
 	GamePlayerStateRemoved = GamePlayerState(3)
+	// Game Types
+	GameTypeMobileSmall = &GameType{Rows: 15, Cols: 7, Players: 10}
 )
 
 // Definition of the game object
 type Game struct {
 	id         uint64
+	gameType   *GameType
 	sim        *Simulation
 	board      *Board
 	state      GameState
@@ -48,9 +54,10 @@ type GamePlayerInfo struct {
 // Initalization of the game object.game  It s being done in the package's
 // global scope so the network event handler will have access to it when
 // receiving new player connections.
-func NewGame(id uint64) *Game {
+func NewGame(id uint64, gameType *GameType) *Game {
 	g := &Game{
 		id:         id,
+		gameType:   gameType,
 		state:      GameStateStopped,
 		players:    make(map[*Player]*GamePlayerInfo),
 		playerCtrl: make(GamePlayerCtrl),
@@ -67,7 +74,11 @@ func (g Game) GetId() uint64 {
 
 // Returns if the game has reached its limit of players
 func (g *Game) IsFull() bool {
-	return false // TODO use a load balancer for this in the world
+	if g.gameType.Players <= len(g.players) {
+		return true
+	}
+
+	return false
 }
 
 // Event receiver to processing messages between the simulation and
@@ -128,24 +139,28 @@ func (g *Game) addPlayer(p *Player) {
 	}
 
 	// Update the current player with the current state of the game
-	toP := g.board.GetEntityArray()
-	if toP != nil {
-		msg := MsgCreateGameUpdate()
-		infos := make([]*GamePlayerInfo, len(g.players))
-		i := 0
-		for _, info := range g.players {
-			infos[i] = info
-			i++
-		}
-		msg.AddPlayerGameInfos(infos)
-		msg.AddEntityUpdates(toP)
-		g.playerUpdate(p, msg)
+	msg := MsgCreateGameUpdate()
+	msg.AddGameType(g.gameType)
+	// Let the new player know about the existing player list
+	infos := make([]*GamePlayerInfo, len(g.players))
+	i := 0
+	for _, info := range g.players {
+		infos[i] = info
+		i++
 	}
+	msg.AddPlayerGameInfos(infos)
+	// Get the entities and add them to the game if ther are any
+	if toP := g.board.GetEntityArray(); toP != nil {
+		msg.AddEntityUpdates(toP)
+	}
+	// send the message to the player
+	g.playerUpdate(p, msg)
+
 	g.players[p] = pInfo
 	p.SetGameCtrl(&g.playerCtrl)
 
 	// Let all players now about the new player
-	msg := MsgCreateGameUpdate()
+	msg = MsgCreateGameUpdate()
 	msg.AddPlayerGameInfo(pInfo, -1)
 	g.broadcastUpdate(msg)
 }
@@ -206,7 +221,7 @@ func (g *Game) broadcastUpdate(update interface{}) {
 
 // Create the simulator, and start it running
 func (g *Game) startGame() {
-	g.board = NewBoard()
+	g.board = NewBoard(g.gameType.Rows, g.gameType.Cols)
 	g.sim = NewSimulation(g.board)
 	g.state = GameStateRunning
 }

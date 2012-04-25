@@ -57,8 +57,12 @@ type MsgBoardUpdateItem struct {
 // Game update message
 type MsgGameUpdate struct {
 	GU bool
+	Gt *MsgPartGameType
 	Ps []MsgPartPlayerInfo
 	Es []MsgPartEntity
+}
+type MsgPartGameType struct {
+	R, C int // rows and columns
 }
 type MsgPartPlayerInfo struct {
 	Id uint64 // Id
@@ -67,13 +71,13 @@ type MsgPartPlayerInfo struct {
 	Sc int    // Score
 }
 type MsgPartEntity struct {
-	Id         uint64 // entity ID
-	T          int    // Type of the entity
-	St         int    // State of the entity
-	X, Y, W, H int    // position
-	C          int    // color
-	Ttl        int64  // Time to live, in miliseconds
-	CAt, UAt   int64  // Create and Update Time
+	Id       uint64 // entity ID
+	T        int    // Type of the entity
+	St       int    // State of the entity
+	X, Y     int    // position
+	C        int    // color
+	Ttl      int64  // Time to live, in miliseconds
+	CAt, UAt int64  // Create and Update Time
 }
 
 func MsgCreateGameUpdate() *MsgGameUpdate {
@@ -101,6 +105,14 @@ func (m *MsgGameUpdate) growEntityUpdatesToFit(addLen int) {
 		newEs := make([]MsgPartEntity, len(m.Es)+addLen)
 		copy(newEs, m.Es)
 		m.Es = newEs
+	}
+}
+
+// Adds the game type to the message to be sent to the player
+func (m *MsgGameUpdate) AddGameType(gameType *GameType) {
+	m.Gt = &MsgPartGameType{
+		R: gameType.Rows,
+		C: gameType.Cols,
 	}
 }
 
@@ -160,9 +172,7 @@ func (m *MsgGameUpdate) AddEntityUpdate(e *Entity, idx int) {
 	m.Es[i].Ttl = int64(e.ttl / time.Millisecond)
 	m.Es[i].CAt = e.createdAt.Unix()
 	m.Es[i].UAt = e.updatedAt.Unix()
-	m.Es[i].X = e.pos.x
-	m.Es[i].Y = e.pos.y
-	m.Es[i].W = e.pos.width
-	m.Es[i].H = e.pos.height
+	m.Es[i].X = e.x
+	m.Es[i].Y = e.y
 	m.Es[i].C = e.color
 }

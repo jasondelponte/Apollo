@@ -23,7 +23,18 @@ var ApolloApp = (function(context){
             cfg.noCanvas();
             return
         }
-        board = newGameBoard(cfg.container, cfg.width, cfg.height)
+
+        var wnd = $(window)
+        board = newGameBoard(cfg.container, wnd.width(), wnd.height())
+        wnd.resize(function() {
+            if(this.resizeTO) clearTimeout(this.resizeTO);
+            this.resizeTO = setTimeout(function() {
+                wnd.trigger('resizeEnd');
+            }, 500);
+        });
+        wnd.bind('resizeEnd', function() {
+            board.resize(wnd.width(), wnd.height());
+        })
 
         ws = new WsConn(board);
         if (!ws.open(cfg.wsURL)) {
@@ -60,6 +71,10 @@ var ApolloApp = (function(context){
         // console.log(evt.data);
         var msg = JSON.parse(evt.data);
         if (msg.GU) { // Game board update
+            var gameType = msg.Gt;
+            if (gameType) {
+                board.setGameType(gameType)
+            }
             var entities = msg.Es;
             if (entities) {
                 this.processEntityUpdate(entities)
@@ -117,8 +132,6 @@ var ApolloApp = (function(context){
         }
     }
 
-
-
     function newGameBoard(container, width, height) {
         var entityColors = ['red', 'blue', 'green', 'gray', 'orange'];
         var stage = null,
@@ -127,11 +140,29 @@ var ApolloApp = (function(context){
             entLayer = null,
             players  = [],
             entities = [];
+            gridInfo = {
+                width: width, height: height,
+                rStep: 0, cStep: 0,
+                rHalf: 0, cHalf: 0
+            };
+            gameType = {
+                rows: 0, cols: 0 // TODO have the server send the game type to the client
+            };
+
+        function calulateGrid(width, height) {
+            rStep = height/gameType.rows;
+            cStep = width/gameType.cols;
+            gridInfo = {
+                width: width, height: height,
+                rStep: rStep, cStep: cStep,
+                rHalf: rStep/2, cHalf: cStep/2
+            };
+        }
 
         function writeMsg(layer, msg) {
             var context = layer.getContext();
             layer.clear();
-            context.font = "18pt Calibri";
+            context.font = "24pt Calibri";
             context.fillStyle = "black";
             context.fillText(msg, 10, 25);
         }
@@ -178,10 +209,10 @@ var ApolloApp = (function(context){
 
             entity.color = entityColors[entity.C];
             var rect = new Kinetic.Rect({
-                x: entity.X,
-                y: entity.Y,
-                width:  entity.W,
-                height: entity.H,
+                x: gridInfo.cHalf + (gridInfo.cStep * entity.X),
+                y: gridInfo.rHalf + (gridInfo.rStep * entity.Y),
+                width:  gridInfo.cStep - 10,
+                height: gridInfo.rStep - 10,
                 fill:   entity.color,
                 stroke: "black",
                 strokeWidth: 2
@@ -209,7 +240,21 @@ var ApolloApp = (function(context){
             entLayer.draw();
         }
 
+        function resize(width, height) {
+            stage.setSize(width, height);
+            calulateGrid(width, height);
+            // TODO all th entities need their size updated
+        }
+
+        function setGameType(gt) {
+            gameType.rows = gt.R;
+            gameType.cols = gt.C;
+            calulateGrid(gridInfo.width, gridInfo.height)
+        }
+
         function init() {
+            calulateGrid(width, height);
+
             stage = new Kinetic.Stage({
                 container: container,
                 width: width, height: height
@@ -230,12 +275,14 @@ var ApolloApp = (function(context){
 
 
         return {
+            setGameType:  setGameType,
             addPlayer:    addPlayer,
             removePlayer: removePlayer,
             updatePlayer: updatePlayer,
             addEntity:    addEntity,
             updateEntity: updateEntity,
             removeEntity: removeEntity,
+            resize:       resize,
         }
     }
 

@@ -9,12 +9,17 @@ import (
 type EntityMap map[EntityId]*Entity
 
 type Board struct {
-	entities EntityMap
+	Rows, Cols int // Defines the number for rows and columns a board is
+	entities   EntityMap
 }
 
 // Creates and initialies a new board
-func NewBoard() *Board {
-	return &Board{entities: make(EntityMap)}
+func NewBoard(rows, cols int) *Board {
+	return &Board{
+		Rows:     rows,
+		Cols:     cols,
+		entities: make(EntityMap),
+	}
 }
 
 // Adds a single entity to the board
@@ -23,6 +28,15 @@ func (b *Board) AddEntity(e *Entity) {
 	e.createdAt = time.Now().UTC()
 	e.updatedAt = e.createdAt
 	b.entities[e.id] = e
+}
+
+func (b *Board) EntityAtPos(x, y int) bool {
+	for _, e := range b.entities {
+		if e.x == x && e.y == y {
+			return true
+		}
+	}
+	return false
 }
 
 // Returns the entity map on the board

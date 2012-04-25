@@ -18,10 +18,6 @@ var (
 	EntityStateRemoved  = EntityState(3)
 )
 
-type EntityPos struct {
-	x, y, width, height int
-}
-
 type Entity struct {
 	id        EntityId
 	typ       EntityType
@@ -29,18 +25,20 @@ type Entity struct {
 	ttl       time.Duration
 	createdAt time.Time
 	updatedAt time.Time
-	pos       EntityPos
+	x         int
+	y         int
 	color     int
 }
 
 // Create a new Entity as a Box
-func NewBoxEntity(id EntityId, ttl time.Duration, pos EntityPos, color int) *Entity {
+func NewBoxEntity(id EntityId, ttl time.Duration, x, y, color int) *Entity {
 	return &Entity{
 		id:    id,
 		state: EntityStateAdded,
 		typ:   EntityTypeBlock,
 		ttl:   ttl,
-		pos:   pos,
+		x:     x,
+		y:     y,
 		color: color,
 	}
 }

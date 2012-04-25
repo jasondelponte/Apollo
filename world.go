@@ -90,7 +90,8 @@ func (w *World) Run() {
 // that is not full. If there are no available games a new one will be 
 // created.
 func (w *World) registerPlayer(p *Player) error {
-	g := w.getAvailableGame()
+	// TODO need some kind of logic for a player to specifiy the game type
+	g := w.getAvailableGame(GameTypeMobileSmall)
 
 	w.players[p] = &PlayerInstance{Game: g}
 
@@ -104,24 +105,24 @@ func (w *World) registerPlayer(p *Player) error {
 
 // Returns a game object from the pool of available games
 // If no available game exists, one will be created.
-func (w *World) getAvailableGame() *Game {
+func (w *World) getAvailableGame(gameType *GameType) *Game {
 	if len(w.games) == 0 {
-		return w.addNewGame()
+		return w.addNewGame(gameType)
 	}
 
 	for _, g := range w.games[:] {
-		if g != nil && !g.IsFull() {
+		if g != nil && g.gameType == gameType && !g.IsFull() {
 			return g
 		}
 	}
 
-	return w.addNewGame()
+	return w.addNewGame(gameType)
 }
 
 // Creates a new game and adds it to the list of games. The
 // newly created game is also returned.
-func (w *World) addNewGame() *Game {
-	g := NewGame(w.nextGameId)
+func (w *World) addNewGame(gameType *GameType) *Game {
+	g := NewGame(w.nextGameId, gameType)
 	w.nextGameId++
 	w.games = append(w.games, g)
 	go g.Run()

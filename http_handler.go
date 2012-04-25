@@ -81,11 +81,9 @@ func (h *HttpHandler) loadTemplates() {
 // home.html file which will allow connection to the websocket
 func (h *HttpHandler) initServeHomeHndlr(path string, world *World) {
 	tmplData := map[string]string{
-		"Host":        "",
-		"WsHost":      "",
-		"RootPath":    h.RootURLPath,
-		"BoardWidth":  "640",
-		"BoardHeight": "960",
+		"Host":     "",
+		"WsHost":   "",
+		"RootPath": h.RootURLPath,
 	}
 
 	hostPortRep := regexp.MustCompile(":\\d+$")
