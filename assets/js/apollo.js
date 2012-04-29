@@ -95,7 +95,7 @@ var ApolloApp = (function(context){
                 break;
 
                 case WsConn.EntityUpdateTypes.present:
-                    this.board.addEntity(entity);
+                    this.board.updateEntity(entity);
                 break;
                 
                 case WsConn.EntityUpdateTypes.selected:
@@ -132,24 +132,26 @@ var ApolloApp = (function(context){
         }
     }
 
-    function newGameBoard(container, width, height) {
+    function newGameBoard(container, startWidth, startHeight) {
         var entityColors = ['red', 'blue', 'green', 'gray', 'orange'];
+        var contNode = document.getElementById(container);
         var stage = null,
-            playerLayer = null,
             msgLayer = null,
             entLayer = null,
             players  = [],
-            entities = [];
+            entities = [],
             gridInfo = {
-                width: width, height: height,
+                width: startWidth, height: startHeight,
                 rStep: 0, cStep: 0,
                 rHalf: 0, cHalf: 0
-            };
+            },
+            entGrid = [],
             gameType = {
-                rows: 0, cols: 0 // TODO have the server send the game type to the client
+                rows: 0, cols: 0
             };
 
         function calulateGrid(width, height) {
+            width -= 10; height -= 10;
             rStep = height/gameType.rows;
             cStep = width/gameType.cols;
             gridInfo = {
@@ -190,7 +192,7 @@ var ApolloApp = (function(context){
             if (idx !== -1) {
                 players.splice(idx, 1);
             } else {
-                console.error('tried to removed a player I dont know about;', player);
+                console.error('tried to removed a player I dont know about;', id);
             }
         }
         function updatePlayer(player) {
@@ -198,7 +200,8 @@ var ApolloApp = (function(context){
             if (idx !== -1) {
                 players[idx] = player;
             } else {
-                console.error('tried to update a player I dont know about;', player);
+                players.push(player)
+                console.info('tried to update a player I dont know about, adding;', player);
             }
         }
 
@@ -209,41 +212,65 @@ var ApolloApp = (function(context){
 
             entity.color = entityColors[entity.C];
             var rect = new Kinetic.Rect({
-                x: gridInfo.cHalf + (gridInfo.cStep * entity.X),
-                y: gridInfo.rHalf + (gridInfo.rStep * entity.Y),
-                width:  gridInfo.cStep - 10,
-                height: gridInfo.rStep - 10,
+                x: (gridInfo.cStep * entity.X),
+                y: (gridInfo.rStep * entity.Y),
+                width:  gridInfo.cStep - 20,
+                height: gridInfo.rStep - 20,
                 fill:   entity.color,
                 stroke: "black",
                 strokeWidth: 2
             });
+            rect.setCenterOffset(-10, -10);
 
-            entities[entity.Id] = {e: entity, d: rect};
-            rect.on('mousedown touchstart', function(evt) {
-                selected(entity.Id);
-            });
+            var entCont = {e: entity, d: rect};
+            if (!entGrid[entity.X]) { entGrid[entity.X] = []; }
+            entGrid[entity.X][entity.Y] = entCont;
+            entities[entity.Id] = entCont;
+
             entLayer.add(rect)
             entLayer.draw();
         }
         function updateEntity(entity) {
-            writeMsg(msgLayer, 'entity '+entity.Id+' selected');
-            entities[entity.Id].e = entity;
+            var entObj = entities[entity.Id];
+            if (!entObj) {
+                addEntity(entity);
+                return;
+            }
+
+            // TODO more updates than just (un)selected
+            if (entity.St === WsConn.EntityUpdateTypes.selected) {
+                entObj.d.setAlpha(0.5);
+            } else {
+                entObj.d.setAlpha(1);
+            }
+            entLayer.draw();
+
         }
         function removeEntity(id) {
-            if (entities[id] && entities[id].d) {
-                d = entities[id].d;
-                d.clearData();
-                d.off('mousedown touchstart');
-                entLayer.remove(d);
+            if (entities[id]) {
+                entObj = entities[id];
+                entGrid[entObj.e.X][entObj.e.Y] = null;
+
+                entObj.d.clearData();
+                entLayer.remove(entObj.d);
             }
             delete entities[id];
             entLayer.draw();
         }
 
         function resize(width, height) {
-            stage.setSize(width, height);
             calulateGrid(width, height);
-            // TODO all th entities need their size updated
+            stage.setSize(width, height);
+
+            for (var id in entities) {
+                if (!entities.hasOwnProperty(id)) { continue; }
+                var entObj = entities[id];
+                entObj.d.setX(gridInfo.cStep * entObj.e.X);
+                entObj.d.setY(gridInfo.rStep * entObj.e.Y);
+                entObj.d.setCenterOffset(-10, -10);
+                entObj.d.setSize(gridInfo.cStep - 20, gridInfo.rStep - 20);
+            }
+            entLayer.draw();
         }
 
         function setGameType(gt) {
@@ -252,21 +279,59 @@ var ApolloApp = (function(context){
             calulateGrid(gridInfo.width, gridInfo.height)
         }
 
+        // Get the coordinates for a mouse or touch event
+        function getCoords(e) {
+            if (e.clientX) {
+                return { x: e.clientX, y: e.clientY };
+            }
+            else if (e.offsetX) {
+                return { x: e.offsetX, y: e.offsetY };
+            }
+            else if (e.layerX) {
+                return { x: e.layerX, y: e.layerY };
+            }
+            else {
+                return { x: e.pageX - contNode.offsetLeft, y: e.pageY - contNode.offsetTop };
+            }
+        }
+
         function init() {
-            calulateGrid(width, height);
+            calulateGrid(gridInfo.width, gridInfo.height);
 
             stage = new Kinetic.Stage({
-                container: container,
-                width: width, height: height
+                container: contNode,
+                width: gridInfo.width, height: gridInfo.height
             });
 
-            playerLayer = new Kinetic.Layer();
             msgLayer = new Kinetic.Layer();
             entLayer = new Kinetic.Layer();
 
             stage.add(entLayer);
-            stage.add(playerLayer);
             stage.add(msgLayer);
+
+            $('#'+container).bind('mousedown touchstart', function(e) {
+                var point = null;
+                if(e.originalEvent.touches && e.originalEvent.touches.length) {
+                    e = e.originalEvent.touches[0];
+                } else if(e.originalEvent.changedTouches && e.originalEvent.changedTouches.length) {
+                    e = e.originalEvent.changedTouches[0];
+                }
+                point = getCoords(e);
+                var x = Math.floor(point.x / gridInfo.cStep);
+                var y = Math.floor(point.y / gridInfo.rStep);
+                if (entGrid[x] && entGrid[x][y]) {
+                    var entObj =  entGrid[x][y];
+                    selected(entObj.e.Id);
+                    if (entObj.e.St === WsConn.EntityUpdateTypes.selected) {
+                        entObj.e.St = WsConn.EntityUpdateTypes.present;
+                        entObj.d.setAlpha(1);
+                    } else {
+                        entObj.e.St = WsConn.EntityUpdateTypes.selected;
+                        entObj.d.setAlpha(0.5);
+                    }
+                    entLayer.draw();
+                }
+            });
         }
 
 

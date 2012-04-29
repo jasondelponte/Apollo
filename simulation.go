@@ -82,15 +82,15 @@ func (s *Simulation) addNew(list []*Entity) []*Entity {
 // Creates a new random block and adds it to the board
 // The reference to the block created will be returned
 func (s *Simulation) addRandomBlock() *Entity {
-	x := rand.Intn(s.board.Cols - 1)
-	y := rand.Intn(s.board.Rows - 1)
+	x := rand.Intn(s.board.Cols)
+	y := rand.Intn(s.board.Rows)
 	if s.board.EntityAtPos(x, y) {
 		// don't create duplicate blocks at the same point
 		return nil
 	}
 
 	e := NewBoxEntity(s.nextEntityId,
-		time.Duration(rand.Intn(2500)+2500)*time.Millisecond,
+		time.Duration(7000)*time.Millisecond,
 		x, y,
 		rand.Intn(5),
 	)

@@ -28,7 +28,7 @@ var (
 	GamePlayerStateUpdated = GamePlayerState(2)
 	GamePlayerStateRemoved = GamePlayerState(3)
 	// Game Types
-	GameTypeMobileSmall = &GameType{Rows: 15, Cols: 7, Players: 10}
+	GameTypeMobileSmall = &GameType{Rows: 7, Cols: 5, Players: 10}
 )
 
 // Definition of the game object
@@ -192,7 +192,12 @@ func (g *Game) procPlayerCtrl(ctrl *PlayerAction, pInfo *GamePlayerInfo) {
 			return
 		}
 
-		e.state = EntityStateSelected
+		// unselect if already selected
+		if e.state == EntityStateSelected {
+			e.state = EntityStatePresent
+		} else {
+			e.state = EntityStateSelected
+		}
 
 		msg := MsgCreateGameUpdate()
 		msg.AddPlayerGameInfo(pInfo, -1)
@@ -200,7 +205,6 @@ func (g *Game) procPlayerCtrl(ctrl *PlayerAction, pInfo *GamePlayerInfo) {
 		g.broadcastUpdate(msg)
 
 		pInfo.State = GamePlayerStatePresent
-		e.state = EntityStatePresent
 	}
 }
 
