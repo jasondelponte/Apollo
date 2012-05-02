@@ -240,7 +240,6 @@ func (g *Game) removePlayer(p *Player) {
 // Processes the player's control in relation to the game.
 func (g *Game) procPlayerCtrl(ctrl *PlayerAction, pInfo *GamePlayerInfo) {
 	if ctrl.Game.Command == PlayerCmdGameSelectEntity {
-		log.Println("Got Player command")
 		// TODO do matching based on what the player selected previously
 		pInfo.State = GamePlayerStateUpdated
 		e := g.board.GetEntityById(ctrl.Game.EntityId)
