@@ -5,6 +5,7 @@ import (
 )
 
 type PlayerCmd int
+type PlayerId uint64
 
 var (
 	PlayerCmdGameSelectEntity = PlayerCmd(0)
@@ -36,7 +37,7 @@ type PlayerGameAction struct {
 
 // Player object
 type Player struct {
-	id          uint64
+	id          PlayerId
 	conn        Connection
 	reader      chan MessageIn
 	toPlayer    chan interface{}
@@ -46,7 +47,7 @@ type Player struct {
 
 // Creates a new intance of the player object, and attaches the
 // existing connection to the player.
-func NewPlayer(id uint64, c Connection) *Player {
+func NewPlayer(id PlayerId, c Connection) *Player {
 	p := &Player{
 		id:   id,
 		conn: c,
@@ -61,7 +62,7 @@ func NewPlayer(id uint64, c Connection) *Player {
 }
 
 // Returns the player's id
-func (p Player) GetId() uint64 {
+func (p Player) GetId() PlayerId {
 	return p.id
 }
 

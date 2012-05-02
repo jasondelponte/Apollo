@@ -5,6 +5,10 @@ var ApolloApp = (function(context){
     var board = null;
 
     function selected(id) {
+        if (!ws.conn) {
+            return;
+        }
+
         entityRemove = {
             Act: {
                 G: {
@@ -118,7 +122,7 @@ var ApolloApp = (function(context){
                 break;
 
                 case WsConn.PlayerUpdateTypes.present:
-                    this.board.addPlayer(player);
+                    this.board.updatePlayer(player);
                 break;
 
                 case WsConn.PlayerUpdateTypes.updated:
@@ -136,19 +140,21 @@ var ApolloApp = (function(context){
         var entityColors = ['red', 'blue', 'green', 'gray', 'orange'];
         var contNode = document.getElementById(container);
         var stage = null,
-            msgLayer = null,
+            playerLayer = null,
             entLayer = null,
             players  = [],
             entities = [],
             gridInfo = {
                 width: startWidth, height: startHeight,
                 rStep: 0, cStep: 0,
-                rHalf: 0, cHalf: 0
+                rHalf: 0, cHalf: 0,
+                rPad: 0,  cPad: 0,
             },
             entGrid = [],
             gameType = {
                 rows: 0, cols: 0
-            };
+            },
+            selcColor = null;
 
         function calulateGrid(width, height) {
             width -= 10; height -= 10;
@@ -157,16 +163,25 @@ var ApolloApp = (function(context){
             gridInfo = {
                 width: width, height: height,
                 rStep: rStep, cStep: cStep,
-                rHalf: rStep/2, cHalf: cStep/2
+                rHalf: rStep/2, cHalf: cStep/2,
+                rPad: 10, cPad: 10
             };
         }
 
-        function writeMsg(layer, msg) {
-            var context = layer.getContext();
-            layer.clear();
-            context.font = "24pt Calibri";
-            context.fillStyle = "black";
-            context.fillText(msg, 10, 25);
+        function updateEntForSelect(state, drawable) {
+            var cPad = gridInfo.cPad,
+                rPad = gridInfo.rPad,
+                alpha = 1;
+
+            if (state === WsConn.EntityUpdateTypes.selected) {
+                alpha = 0.5;
+                cPad = gridInfo.cHalf * 0.5;
+                rPad = gridInfo.rHalf * 0.5;
+            }
+
+            drawable.setAlpha(alpha);
+            drawable.setCenterOffset(-1*cPad, -1*rPad);
+            drawable.setSize(gridInfo.cStep - (cPad*2), gridInfo.rStep - (rPad*2));
         }
 
         // Players
@@ -175,32 +190,61 @@ var ApolloApp = (function(context){
             var idx;
             for (idx=pLen-1; idx >= 0; idx--) {
                 var player = players[idx];
-                if (player.Id === id) {
+                if (player.p.Id === id) {
                     break;
                 }
             }
             return idx;
         }
+
         function addPlayer(player) {
             var idx = findPlayer(player.Id);
             if (idx !== -1) { return; }
-            players.push(player);
-            playersAdded = true;
+
+            var text = new Kinetic.Text({
+                x: 0,
+                y: players.length * 24,
+                fontSize: 22,
+                textFill: 'black',
+                fontFamily: "Calibri",
+                text: 'P '+player.Id+' score: '+player.Sc,
+            });
+            playerLayer.add(text);
+            playerLayer.draw();
+
+            players.push({p: player, d: text});
         }
+
         function removePlayer(id) {
             var idx = findPlayer(id);
-            if (idx !== -1) {
-                players.splice(idx, 1);
-            } else {
+            if (idx === -1) {
                 console.error('tried to removed a player I dont know about;', id);
+                return
             }
+
+            playerObj = players[idx];
+            playerObj.d.clearData();
+            playerLayer.remove(playerObj.d);
+            playerObj.d = null;
+
+            players.splice(idx, 1);
+
+            // Update indexes to reflect removal
+            for (idx=0; idx<players.length; idx++) {
+                players[idx].d.setY(idx * 24);
+            }
+            playerLayer.draw();
         }
+
         function updatePlayer(player) {
             var idx = findPlayer(player.Id);
             if (idx !== -1) {
-                players[idx] = player;
+                playerCont = players[idx];
+                playerCont.p = player;
+                playerCont.d.setText('P '+player.Id+' score: '+player.Sc);
+                playerLayer.draw();
             } else {
-                players.push(player)
+                addPlayer(player)
                 console.info('tried to update a player I dont know about, adding;', player);
             }
         }
@@ -214,46 +258,44 @@ var ApolloApp = (function(context){
             var rect = new Kinetic.Rect({
                 x: (gridInfo.cStep * entity.X),
                 y: (gridInfo.rStep * entity.Y),
-                width:  gridInfo.cStep - 20,
-                height: gridInfo.rStep - 20,
                 fill:   entity.color,
                 stroke: "black",
-                strokeWidth: 2
+                strokeWidth: 2,
             });
-            rect.setCenterOffset(-10, -10);
+            updateEntForSelect(entity.St, rect);
 
-            var entCont = {e: entity, d: rect};
+            var entObj = {e: entity, d: rect};
             if (!entGrid[entity.X]) { entGrid[entity.X] = []; }
-            entGrid[entity.X][entity.Y] = entCont;
-            entities[entity.Id] = entCont;
+            entGrid[entity.X][entity.Y] = entObj;
+            entities[entity.Id] = entObj;
 
             entLayer.add(rect)
             entLayer.draw();
         }
+
         function updateEntity(entity) {
             var entObj = entities[entity.Id];
             if (!entObj) {
                 addEntity(entity);
                 return;
             }
+            entObj.e = entity;
 
-            // TODO more updates than just (un)selected
-            if (entity.St === WsConn.EntityUpdateTypes.selected) {
-                entObj.d.setAlpha(0.5);
-            } else {
-                entObj.d.setAlpha(1);
-            }
+            updateEntForSelect(entity.St, entObj.d);
             entLayer.draw();
-
         }
-        function removeEntity(id) {
-            if (entities[id]) {
-                entObj = entities[id];
-                entGrid[entObj.e.X][entObj.e.Y] = null;
 
-                entObj.d.clearData();
-                entLayer.remove(entObj.d);
+        function removeEntity(id) {
+            if (!entities[id]) {
+                return;
             }
+
+            entObj = entities[id];
+            entGrid[entObj.e.X][entObj.e.Y] = null;
+
+            entObj.d.clearData();
+            entLayer.remove(entObj.d);
+            entObj.d = null;
             delete entities[id];
             entLayer.draw();
         }
@@ -267,8 +309,8 @@ var ApolloApp = (function(context){
                 var entObj = entities[id];
                 entObj.d.setX(gridInfo.cStep * entObj.e.X);
                 entObj.d.setY(gridInfo.rStep * entObj.e.Y);
-                entObj.d.setCenterOffset(-10, -10);
-                entObj.d.setSize(gridInfo.cStep - 20, gridInfo.rStep - 20);
+
+                updateEntForSelect(entObj.e.St, entObj.d);
             }
             entLayer.draw();
         }
@@ -303,11 +345,11 @@ var ApolloApp = (function(context){
                 width: gridInfo.width, height: gridInfo.height
             });
 
-            msgLayer = new Kinetic.Layer();
+            playerLayer = new Kinetic.Layer();
             entLayer = new Kinetic.Layer();
 
             stage.add(entLayer);
-            stage.add(msgLayer);
+            stage.add(playerLayer);
 
             $('#'+container).bind('mousedown touchstart', function(e) {
                 var point = null;
@@ -321,14 +363,19 @@ var ApolloApp = (function(context){
                 var y = Math.floor(point.y / gridInfo.rStep);
                 if (entGrid[x] && entGrid[x][y]) {
                     var entObj =  entGrid[x][y];
-                    selected(entObj.e.Id);
+
                     if (entObj.e.St === WsConn.EntityUpdateTypes.selected) {
                         entObj.e.St = WsConn.EntityUpdateTypes.present;
-                        entObj.d.setAlpha(1);
+                        selected(entObj.e.Id);
+
                     } else {
+                        // TODO make it so we never send the select msg out
+                        // if the color is not matching.
                         entObj.e.St = WsConn.EntityUpdateTypes.selected;
-                        entObj.d.setAlpha(0.5);
+                        selected(entObj.e.Id);
                     }
+
+                    updateEntForSelect(entObj.e.St, entObj.d);
                     entLayer.draw();
                 }
             });

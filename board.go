@@ -24,7 +24,6 @@ func NewBoard(rows, cols int) *Board {
 
 // Adds a single entity to the board
 func (b *Board) AddEntity(e *Entity) {
-	log.Println("Adding new entitiy,", e.GetId())
 	e.createdAt = time.Now().UTC()
 	e.updatedAt = e.createdAt
 	b.entities[e.id] = e
@@ -72,7 +71,6 @@ func (b *Board) RemoveEntityById(id EntityId) *Entity {
 	e := b.entities[id]
 
 	if e != nil {
-		log.Println("Removing entity,", e.id)
 		e.state = EntityStateRemoved
 		delete(b.entities, e.id)
 		return e

@@ -42,13 +42,17 @@ type Game struct {
 	playerCtrl GamePlayerCtrl
 	AddPlayer  chan *Player
 	RmPlayer   chan *Player
+	// Cache
+	pInfoUpdates []*GamePlayerInfo
 }
 
 type GamePlayerInfo struct {
-	PlayerId uint64
-	State    GamePlayerState
-	Name     string
-	Score    int
+	PlayerId  PlayerId
+	State     GamePlayerState
+	Name      string
+	Score     int
+	SelcColor EntityColor
+	Selected  []*Entity
 }
 
 // Initalization of the game object.game  It s being done in the package's
@@ -63,6 +67,8 @@ func NewGame(id uint64, gameType *GameType) *Game {
 		playerCtrl: make(GamePlayerCtrl),
 		AddPlayer:  make(chan *Player),
 		RmPlayer:   make(chan *Player),
+		// Cache
+		pInfoUpdates: make([]*GamePlayerInfo, 10),
 	}
 	return g
 }
@@ -117,10 +123,44 @@ func (g *Game) Run() {
 		}
 	}
 }
+
 func (g *Game) simulate() {
 	toA := g.sim.Step()
+
 	if toA != nil {
+		g.pInfoUpdates = g.pInfoUpdates[0:0] // reinit the update cache
+
+		// Searching over the changes for removed items someone has selected.
+		for _, e := range toA {
+			if e.state == EntityStateRemoved && e.Owner != nil {
+				// Search through the players finding selections if there were any.
+				pInfo := g.players[e.Owner]
+				e.Owner = nil
+				if pInfo == nil {
+					log.Println("Removing entity owned by player that no longer exists")
+					continue
+				}
+
+				// Update the player's score and remove the selected entities.
+				for _, selc := range pInfo.Selected {
+					if selc != nil {
+						g.board.RemoveEntityById(selc.GetId())
+						toA = append(toA, selc)
+					}
+				}
+				if len(pInfo.Selected) > 1 {
+					pInfo.Score += len(pInfo.Selected) - 1
+				}
+				pInfo.Selected = pInfo.Selected[0:0] // Clear this player's selection list
+				pInfo.SelcColor = EntityNoColor
+
+				g.pInfoUpdates = append(g.pInfoUpdates, pInfo)
+			}
+		}
+
+		// Send the message
 		msg := MsgCreateGameUpdate()
+		msg.AddPlayerGameInfos(g.pInfoUpdates)
 		msg.AddEntityUpdates(toA)
 		g.broadcastUpdate(msg)
 	}
@@ -129,11 +169,14 @@ func (g *Game) simulate() {
 // Adds a new player to the game, and starting the game if needed.
 func (g *Game) addPlayer(p *Player) {
 	pInfo := &GamePlayerInfo{
-		State:    GamePlayerStateAdded,
-		PlayerId: p.GetId(),
-		Score:    0,
-		Name:     fmt.Sprintf("Player %d", p.GetId()),
+		State:     GamePlayerStateAdded,
+		PlayerId:  p.GetId(),
+		Score:     0,
+		Name:      fmt.Sprintf("Player %d", p.GetId()),
+		Selected:  make([]*Entity, 10),
+		SelcColor: EntityNoColor,
 	}
+	pInfo.Selected = pInfo.Selected[0:0]
 	if g.state != GameStateRunning {
 		g.startGame()
 	}
@@ -172,9 +215,21 @@ func (g *Game) removePlayer(p *Player) {
 		delete(g.players, p)
 		p.SetGameCtrl(nil)
 
+		// Clear the ownership of these entities if there were any
+		for _, e := range pInfo.Selected {
+			if e == nil {
+				continue
+			}
+			e.Owner = nil
+			e.state = EntityStatePresent
+		}
+
+		// Let everyone else know the player left, and everything they had
+		// is now unselected
 		pInfo.State = GamePlayerStateRemoved
 		msg := MsgCreateGameUpdate()
 		msg.AddPlayerGameInfo(pInfo, -1)
+		msg.AddEntityUpdates(pInfo.Selected)
 		g.broadcastUpdate(msg)
 	}
 	if len(g.players) == 0 {
@@ -185,6 +240,7 @@ func (g *Game) removePlayer(p *Player) {
 // Processes the player's control in relation to the game.
 func (g *Game) procPlayerCtrl(ctrl *PlayerAction, pInfo *GamePlayerInfo) {
 	if ctrl.Game.Command == PlayerCmdGameSelectEntity {
+		log.Println("Got Player command")
 		// TODO do matching based on what the player selected previously
 		pInfo.State = GamePlayerStateUpdated
 		e := g.board.GetEntityById(ctrl.Game.EntityId)
@@ -195,8 +251,25 @@ func (g *Game) procPlayerCtrl(ctrl *PlayerAction, pInfo *GamePlayerInfo) {
 		// unselect if already selected
 		if e.state == EntityStateSelected {
 			e.state = EntityStatePresent
-		} else {
+			// remove tyhe old player's ref first
+			oldPInfo := g.players[e.Owner]
+			if oldPInfo != nil {
+				for i, selc := range oldPInfo.Selected {
+					if selc != nil && selc.GetId() == e.GetId() {
+						oldPInfo.Selected[i] = nil
+					}
+				}
+			}
+			e.Owner = nil
+
+		} else if pInfo.SelcColor == e.color || pInfo.SelcColor == EntityNoColor {
 			e.state = EntityStateSelected
+			e.Owner = ctrl.Player
+			pInfo.SelcColor = e.color
+			pInfo.Selected = append(pInfo.Selected, e)
+
+		} else {
+			e.state = EntityStatePresent
 		}
 
 		msg := MsgCreateGameUpdate()

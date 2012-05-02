@@ -138,7 +138,7 @@ func (m *MsgGameUpdate) AddPlayerGameInfo(info *GamePlayerInfo, idx int) {
 		m.growPlayerGameInfosToFit(1)
 	}
 
-	m.Ps[i].Id = info.PlayerId
+	m.Ps[i].Id = uint64(info.PlayerId)
 	m.Ps[i].St = int(info.State)
 	m.Ps[i].N = info.Name
 	m.Ps[i].Sc = info.Score
@@ -150,6 +150,9 @@ func (m *MsgGameUpdate) AddEntityUpdates(entities []*Entity) {
 	m.growEntityUpdatesToFit(len(entities))
 
 	for i, e := range entities {
+		if e == nil {
+			continue
+		}
 		m.AddEntityUpdate(e, i)
 	}
 }
@@ -174,5 +177,5 @@ func (m *MsgGameUpdate) AddEntityUpdate(e *Entity, idx int) {
 	m.Es[i].UAt = e.updatedAt.Unix()
 	m.Es[i].X = e.x
 	m.Es[i].Y = e.y
-	m.Es[i].C = e.color
+	m.Es[i].C = int(e.color)
 }

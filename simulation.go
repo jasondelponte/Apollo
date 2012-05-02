@@ -5,9 +5,14 @@ import (
 	"time"
 )
 
+const (
+	MinTimeBetweenAdds = (1000 * time.Millisecond)
+)
+
 type Simulation struct {
 	nextEntityId EntityId
 	board        *Board
+	lastAddedOn  time.Time
 
 	// persistant temp storage
 	toRmList     []*Entity
@@ -26,20 +31,14 @@ func NewSimulation(b *Board) *Simulation {
 
 // Incremental update to the board, returns the entities updated
 func (s *Simulation) Step() []*Entity {
-	timeNow := time.Now().UTC()
-
 	// get empty slices from the perisitant arrays
 	toRmList := s.toRmList[0:0]
-	toRemove := 0
 	toUpdateList := s.toUpdateList[0:0]
-	toUpdate := 0
 
 	es := s.board.GetEntities()
 	for _, e := range es {
-		if timeNow.Sub(e.updatedAt) >= e.ttl {
+		if time.Since(e.updatedAt) >= e.ttl {
 			toRmList = append(toRmList, e)
-			toRemove++
-
 		}
 		// TODO not sure what to do with just updated yet.
 	}
@@ -49,11 +48,13 @@ func (s *Simulation) Step() []*Entity {
 		s.board.RemoveEntityById(e.id)
 		// Add the items to be removed to the update list to be returned
 		toUpdateList = append(toUpdateList, e)
-		toUpdate++
 	}
 
 	// Adds new entities, and update the list
-	toUpdateList = s.addNew(toUpdateList)
+	if time.Since(s.lastAddedOn) >= MinTimeBetweenAdds {
+		toUpdateList = s.addNew(toUpdateList)
+		s.lastAddedOn = time.Now().UTC()
+	}
 
 	// Update the persistant objects
 	s.toRmList = toRmList
@@ -69,7 +70,7 @@ func (s *Simulation) Step() []*Entity {
 
 // Adds new entities and updates the list as needed
 func (s *Simulation) addNew(list []*Entity) []*Entity {
-	c := rand.Intn(3)
+	c := rand.Intn(5)
 	for i := 0; i < c; i++ {
 		if e := s.addRandomBlock(); e != nil {
 			list = append(list, e)
@@ -92,7 +93,7 @@ func (s *Simulation) addRandomBlock() *Entity {
 	e := NewBoxEntity(s.nextEntityId,
 		time.Duration(7000)*time.Millisecond,
 		x, y,
-		rand.Intn(5),
+		EntityColor(rand.Intn(5)),
 	)
 	s.nextEntityId++
 	s.board.AddEntity(e)

@@ -35,7 +35,8 @@ type HttpHandler struct {
 	Port           uint
 	ServeStatic    bool
 	templates      *template.Template
-	nextWsConnId   uint64
+	nextConnId     uint64
+	nextPlayerId   PlayerId
 	rootURLPathLen int
 	WsConnType     string
 }
@@ -158,20 +159,22 @@ func (h *HttpHandler) initServeGbWsHndlr(path string, world *World) {
 			return
 		}
 
-		h.kickOffPlayer(NewGbWsConn(h.nextWsConnId, ws), world)
+		h.kickOffPlayer(NewGbWsConn(h.nextConnId, ws), world)
+		h.nextConnId++
 	})
 }
 
 // Creates the websocket http upgrade using the go.net websocket version
 func (h *HttpHandler) initServeGnWsHndlr(path string, world *World) {
 	http.Handle(path, gnws.Handler(func(ws *gnws.Conn) {
-		h.kickOffPlayer(NewGnWsConn(h.nextWsConnId, ws), world)
+		h.kickOffPlayer(NewGnWsConn(h.nextConnId, ws), world)
+		h.nextConnId++
 	}))
 }
 
 func (h *HttpHandler) kickOffPlayer(conn Connection, world *World) {
-	player := NewPlayer(h.nextWsConnId, conn)
-	h.nextWsConnId++
+	player := NewPlayer(h.nextPlayerId, conn)
+	h.nextPlayerId++
 
 	defer func() {
 		log.Println("Player", player.GetId(), " connection closing, unregistering")

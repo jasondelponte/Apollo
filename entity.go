@@ -7,8 +7,10 @@ import (
 type EntityId uint64
 type EntityType int
 type EntityState int
+type EntityColor int
 
 var (
+	EntityNoColor = EntityColor(-1)
 	// Entity Types
 	EntityTypeBlock = EntityType(0)
 	// Entity States
@@ -27,11 +29,12 @@ type Entity struct {
 	updatedAt time.Time
 	x         int
 	y         int
-	color     int
+	color     EntityColor
+	Owner     *Player
 }
 
 // Create a new Entity as a Box
-func NewBoxEntity(id EntityId, ttl time.Duration, x, y, color int) *Entity {
+func NewBoxEntity(id EntityId, ttl time.Duration, x, y int, color EntityColor) *Entity {
 	return &Entity{
 		id:    id,
 		state: EntityStateAdded,
