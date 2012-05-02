@@ -28,7 +28,7 @@ var (
 	GamePlayerStateUpdated = GamePlayerState(2)
 	GamePlayerStateRemoved = GamePlayerState(3)
 	// Game Types
-	GameTypeMobileSmall = &GameType{Rows: 7, Cols: 5, Players: 10}
+	GameTypeMobileSmall = &GameType{Rows: 7, Cols: 5, Players: 5}
 )
 
 // Definition of the game object
