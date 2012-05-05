@@ -33,6 +33,7 @@ type HttpHandler struct {
 	RootURLPath    string
 	Addr           string
 	Port           uint
+	WsPort         uint
 	ServeStatic    bool
 	templates      *template.Template
 	nextConnId     uint64
@@ -114,11 +115,11 @@ func (h *HttpHandler) initServeHomeHndlr(path string, world *World) {
 		// Host for websockets
 		if len(tmplData["WsHost"]) == 0 {
 			tmplData["WsHost"] = r.Host
-			if h.Port != 0 {
+			if h.WsPort != 0 {
 				if strings.Contains(r.Host, ":") {
-					tmplData["WsHost"] = hostPortRep.ReplaceAllString(r.Host, fmt.Sprintf(":%d", h.Port))
+					tmplData["WsHost"] = hostPortRep.ReplaceAllString(r.Host, fmt.Sprintf(":%d", h.WsPort))
 				} else {
-					tmplData["WsHost"] = fmt.Sprintf("%s:%d", r.Host, h.Port)
+					tmplData["WsHost"] = fmt.Sprintf("%s:%d", r.Host, h.WsPort)
 				}
 			}
 		}
