@@ -14,11 +14,6 @@ var wsConnType = flag.String("w", "gn", "Sets the websocket library to use, 'gn'
 func main() {
 	flag.Parse()
 
-	// If the websocket port is not defined, use the normal port
-	if *wsport == 0 {
-		*wsport = *port
-	}
-
 	httpHndlr := &HttpHandler{
 		Addr:        *addr,
 		Port:        *port,
