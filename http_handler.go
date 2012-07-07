@@ -83,6 +83,7 @@ func (h *HttpHandler) loadTemplates() {
 // home.html file which will allow connection to the websocket
 func (h *HttpHandler) initServeHomeHndlr(path string, world *World) {
 	tmplData := map[string]string{
+		"Proto":    "",
 		"Host":     "",
 		"WsHost":   "",
 		"RootPath": h.RootURLPath,
@@ -101,7 +102,16 @@ func (h *HttpHandler) initServeHomeHndlr(path string, world *World) {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-		// Normal http host
+		// Proto of original request
+		if len(tmplData["Proto"]) == 0 {
+			proto := r.Header.Get("X-Forwarded-Proto")
+			if proto == "https" {
+				tmplData["Proto"] = proto
+			} else {
+				tmplData["Proto"] = "http"
+			}
+		}
+		// Normal host, with port maybe
 		if len(tmplData["Host"]) == 0 {
 			tmplData["Host"] = r.Host
 			if h.ServeStatic && h.Port != 0 {
