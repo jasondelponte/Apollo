@@ -11,7 +11,7 @@
 <script type="text/javascript">
     $(document).ready(function() {
         window.apolloApp = ApolloApp.runApp({
-            wsURL: "ws://" + {{.WsHost}} + {{.RootPath}} + "/ws",
+            wsURL: "{{.WsProto}}://" + {{.WsHost}} + {{.RootPath}} + "/ws",
             container: 'game-board',
             noCanvas: function() {
                 $('.no-canvas').removeClass('hidden');

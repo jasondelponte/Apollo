@@ -34,6 +34,8 @@ type HttpHandler struct {
 	Addr           string
 	Port           uint
 	WsPort         uint
+	TlsCrt         string
+	TlsKey         string
 	ServeStatic    bool
 	templates      *template.Template
 	nextConnId     uint64
@@ -68,9 +70,20 @@ func (h *HttpHandler) HandleHttpConnection(world *World) {
 		address = fmt.Sprintf("%s:%d", h.Addr, h.Port)
 	}
 
-	err := http.ListenAndServe(address, nil)
-	if err != nil {
-		log.Fatal("ListenAndServe: ", err)
+	wsAddress := fmt.Sprintf("%s:%d", h.Addr, h.WsPort)
+	
+	// Start listening for static files and html content
+	go http.ListenAndServe(address, nil)
+
+	// Start listening for the websocket connections
+	if len(h.TlsCrt) != 0 && len(h.TlsKey) != 0 {
+		if err := http.ListenAndServeTLS(wsAddress, h.TlsCrt, h.TlsKey, nil); err != nil {
+			log.Fatal("ListenAndServeTLS: ", err)
+		}
+	} else {
+		if err := http.ListenAndServe(wsAddress, nil); err != nil {
+			log.Fatal("ListenAndServe: ", err)
+		}
 	}
 }
 
@@ -84,6 +97,7 @@ func (h *HttpHandler) loadTemplates() {
 func (h *HttpHandler) initServeHomeHndlr(path string, world *World) {
 	tmplData := map[string]string{
 		"Proto":    "",
+		"WsProto":  "",
 		"Host":     "",
 		"WsHost":   "",
 		"RootPath": h.RootURLPath,
@@ -96,10 +110,6 @@ func (h *HttpHandler) initServeHomeHndlr(path string, world *World) {
 			ErrHttpResourceNotFound.Report(w)
 			return
 		}
-		if r.Method != "GET" {
-			ErrHttpMethodNotAllowed.Report(w)
-			return
-		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
 		// Proto of original request
@@ -109,6 +119,14 @@ func (h *HttpHandler) initServeHomeHndlr(path string, world *World) {
 				tmplData["Proto"] = proto
 			} else {
 				tmplData["Proto"] = "http"
+			}
+		}
+		// Websocket Protocol
+		if len(tmplData["WsProto"]) == 0 {
+			if len(h.TlsCrt) != 0 && len(h.TlsKey) != 0 {
+				tmplData["WsProto"] = "wss"
+			} else {
+				tmplData["WsProto"] = "ws"
 			}
 		}
 		// Normal host, with port maybe

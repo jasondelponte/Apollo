@@ -10,6 +10,8 @@ var wsport = flag.Uint("wsport", 0, "Port the client will connect to the websock
 var rootURLPath = flag.String("r", "", "URL Path root of the webapp")
 var servceStatic = flag.Bool("s", false, "Set if apollo should service up static content")
 var wsConnType = flag.String("w", "gn", "Sets the websocket library to use, 'gn' for go.net, and 'gb' for garyburd/websocket")
+var tlsCrtFile = flag.String("crt", "", "Sets the TLS crt file path name")
+var tlsKeyFile = flag.String("key", "", "Sets the TLS key file path name")
 
 func main() {
 	flag.Parse()
@@ -17,6 +19,8 @@ func main() {
 	httpHndlr := &HttpHandler{
 		Addr:        *addr,
 		Port:        *port,
+		TlsCrt:      *tlsCrtFile,
+		TlsKey:      *tlsKeyFile,
 		WsPort:      *wsport,
 		RootURLPath: *rootURLPath,
 		ServeStatic: *servceStatic,
