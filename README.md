@@ -1,4 +1,6 @@
-## Installing it
+[![baby-gopher](https://raw2.github.com/drnic/babygopher-site/gh-pages/images/babygopher-badge.png)](http://www.babygopher.org)
+
+## Installing
 
 To install the package follow the normal go package installtion.  The go.net websocket package may need to be installed manually, and mercurial is require to pull from that repo.
 
