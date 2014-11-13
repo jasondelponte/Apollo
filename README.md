@@ -1,5 +1,3 @@
-[![baby-gopher](https://raw2.github.com/drnic/babygopher-site/gh-pages/images/babygopher-badge.png)](http://www.babygopher.org)
-
 ## Installing
 
 To install the package follow the normal go package installtion.  The go.net websocket package may need to be installed manually, and mercurial is require to pull from that repo.
@@ -14,7 +12,10 @@ go get github.com/jasondelponte/Apollo
 * -a Address - The IP address the app will listen on, default is blank, which whould mean "localhost"
 * -r RootURLPath - The root URL path that you'll use to access the app at. eg. "jasondelponte.com/goapps/apollo/" would be "-r /goapps/apollo".  Blank is the default which translates into "/"
 * -s true|false - Sets if the webapp should serve up the resources in the "assets" directory its self. Default is false, and expects some other service to serve the files in the assets directory.
-* -w gb|gn - Sets which websocket library to use. **gb** (go.net/websocket) which supports version 13 and 8. **gb** (gauryburd/go-websocket) which supports version 13
+* -w gb|gn - Sets which websocket library to use. **gn** (go.net/websocket) which supports only version 13, and **gb** (gauryburd/go-websocket) which supports both version 13 and 8.
+
+
+**Notes: gauryburd/go-websocket no longer exists. If I get a chance I'll update the project to use gorilla/websock instead.
 
 example:
 ```bash
